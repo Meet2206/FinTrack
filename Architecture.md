@@ -1,6 +1,6 @@
 # 🏗️ Architecture
 
-[Readme](Readme.md) · [Plan](Plan.md) · **Architecture** · [Backend](Backend.md) · [DB](DB.md)
+[Readme](Readme.md) · [Plan](Plan.md) · **Architecture** · [Backend](Backend.md) · [DB](DB.md) · [Testing](TESTING.md) · [Reason](Reason.md)
 
 | | |
 |---|---|
@@ -148,7 +148,7 @@
 | 3 | **Split** | Cut the PDF into groups of 3 pages, so each AI answer stays short and reliable. | `pypdf` writes new, unlocked mini-PDFs in memory |
 | 4 | **Read (extract)** | Claude reads each group and fills in a strict form: date, description, money out, money in, balance. | `client.messages.parse(..., output_format=StatementChunk)` returns a validated Pydantic object |
 | 5 | **Join** | Put the groups back together in order. | Header fields from the first group, closing balance from the last |
-| 6 | **Check the math** | Start from the opening balance, apply every row, and compare to the bank's printed balance each time. | Tolerance of 0.01; any mismatch is pinpointed to its row |
+| 6 | **Check the math and dates** | Start from the opening balance, apply every row, and compare to the bank's printed balance each time. Also check every date is real and inside the statement period. | Tolerance of 0.01; any mismatch is pinpointed to its row; dates ±7 days around the period |
 | 7 | **Save** | Write the rows to the ledger. Rows we already have (from an overlapping statement) are skipped. | `INSERT OR IGNORE` keyed on the transaction fingerprint |
 | 8 | **Categorize** | Known shops: instant, from saved rules. Unknown shops: Claude, about 100 rows per request. | Rule lookup → keyword match → AI with your past corrections as examples |
 | 9 | **Flag for review** | Rows the AI wasn't sure about, plus every row of a statement whose math didn't check out. | `needs_review = 1` plus a reason |
@@ -296,6 +296,9 @@ A row is copied to Google Sheets only when it is **approved** (confident, or rev
 | Same file uploaded again | "Already processed on 22 Nov. Nothing to do." | Stops immediately. Zero cost. |
 | The math doesn't add up | "Row 37: expected 1,204.50, statement shows 1,240.50" | Status `mismatch`. All rows held for review. You fix the row or approve the statement. |
 | Statement has no balances at all | "Can't verify this statement automatically." | All rows go to review |
+| A date is impossible or outside the statement period | "Row 4: date 2027-11-05 is outside the statement period" | Status `mismatch`. Fix the date on the Transactions page (it's re-checked automatically) or approve. |
+| A quiet month with no transactions | "Read 0 transactions. ✅ Balances match" | Accepted. Nothing to sync. |
+| Re-uploading a fresh copy after a failed attempt | Normal result | Rows already saved are skipped, and any still uncategorized are sorted now |
 | The AI's answer was cut off (very long page group) | Nothing, it's automatic | Retries that group with fewer pages |
 | Claude is busy or slow (rate limit, server error) | "Claude is busy. Try again in a minute." | The SDK retries automatically (twice). If it still fails: status `failed`, safe to retry. |
 | No internet | "Can't reach Claude / Google. Check your connection." | Nothing half-written. Retry later. |

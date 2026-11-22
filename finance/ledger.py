@@ -212,7 +212,7 @@ def forget_statement(db, statement_id: int) -> tuple[set[tuple[str, str]], str |
     tabs = {
         (r["synced_category"], r["month"])
         for r in db.execute(
-            "SELECT DISTINCT synced_category, month FROM transactions WHERE statement_id = ? AND synced_category IS NOT NULL",
+            "SELECT DISTINCT synced_category, COALESCE(synced_month, month) AS month FROM transactions WHERE statement_id = ? AND synced_category IS NOT NULL",
             (statement_id,),
         )
     }
@@ -287,11 +287,13 @@ def statement_rows(db, statement_id: int) -> list[sqlite3.Row]:
     ).fetchall()
 
 
-def uncategorized(db, statement_id: int) -> list[sqlite3.Row]:
+def uncategorized(db) -> list[sqlite3.Row]:
+    """Every row still waiting for a category, whichever upload it came from. (If an earlier
+    attempt failed half-way and you re-upload a freshly downloaded copy, the rows already saved
+    by the first attempt belong to that attempt, but they still need sorting.)"""
     return db.execute(
         """SELECT id, txn_date, description, amount FROM transactions
-           WHERE statement_id = ? AND category IS NULL ORDER BY row_number""",
-        (statement_id,),
+           WHERE category IS NULL ORDER BY statement_id, row_number"""
     ).fetchall()
 
 
@@ -385,27 +387,42 @@ def transactions_frame(
     )
 
 
+class EditError(ValueError):
+    """An edit that can't be saved (e.g. a date that isn't YYYY-MM-DD)."""
+
+
+def _valid_date(value: str) -> str:
+    try:
+        return datetime.strptime(str(value).strip(), "%Y-%m-%d").strftime("%Y-%m-%d")
+    except ValueError as e:
+        raise EditError(f"'{value}' isn't a date like 2026-11-05") from e
+
+
 def apply_user_edits(db, before: pd.DataFrame, after: pd.DataFrame, remember: bool) -> tuple[int, set[int]]:
-    """Save edits from the Transactions page. Returns (rows changed, statements whose amounts changed)."""
+    """Save edits from the Transactions page (shop, category, amount, date).
+    Returns (rows changed, statements whose amounts or dates changed, so they can be re-checked)."""
     old = before.set_index("id")
-    changed, amount_changed = 0, set()
+    changed, recheck = 0, set()
     stamp = now()
     for row in after.itertuples(index=False):
         prev = old.loc[row.id]
         category, merchant = _clean(row.category), _clean(row.merchant)
         amount = float(row.amount) if _clean(row.amount) is not None else float(prev.amount)
+        txn_date = _valid_date(row.txn_date) if _clean(row.txn_date) else prev.txn_date
         cat_changed = category != _clean(prev.category)
-        if not (cat_changed or merchant != _clean(prev.merchant) or abs(amount - float(prev.amount)) > 0.001):
+        amount_changed = abs(amount - float(prev.amount)) > 0.001
+        date_changed = txn_date != prev.txn_date
+        if not (cat_changed or amount_changed or date_changed or merchant != _clean(prev.merchant)):
             continue
         changed += 1
-        if abs(amount - float(prev.amount)) > 0.001:
-            amount_changed.add(int(prev.statement_id))
+        if amount_changed or date_changed:
+            recheck.add(int(prev.statement_id))
         db.execute(
-            f"""UPDATE transactions SET category = ?, merchant = ?, amount = ?,
+            f"""UPDATE transactions SET category = ?, merchant = ?, amount = ?, txn_date = ?,
                     {"category_source = 'user', confidence = 'high', needs_review = 0, review_reason = NULL," if cat_changed else ""}
                     synced_at = NULL, updated_at = ?
                 WHERE id = ?""",
-            (category, merchant, round(amount, 2), stamp, row.id),
+            (category, merchant, round(amount, 2), txn_date, stamp, row.id),
         )
         if remember and cat_changed and category:
             save_rule(
@@ -418,7 +435,7 @@ def apply_user_edits(db, before: pd.DataFrame, after: pd.DataFrame, remember: bo
             )
     db.commit()
     refresh_statement_statuses(db)
-    return changed, amount_changed
+    return changed, recheck
 
 
 def recent_corrections(db, limit: int = 40) -> list[str]:
@@ -485,7 +502,7 @@ def delete_rule(db, key: str) -> None:
 
 def rows_needing_sync(db) -> list[sqlite3.Row]:
     return db.execute(
-        """SELECT id, month, category, synced_category FROM transactions
+        """SELECT id, month, category, synced_category, synced_month FROM transactions
            WHERE synced_at IS NULL AND needs_review = 0 AND category IS NOT NULL"""
     ).fetchall()
 
@@ -516,7 +533,7 @@ def mark_synced(db, ids: list[str]) -> None:
     """Remember that Google Sheets now matches these rows."""
     stamp = now()
     db.executemany(
-        "UPDATE transactions SET synced_at = ?, synced_category = category WHERE id = ?",
+        "UPDATE transactions SET synced_at = ?, synced_category = category, synced_month = month WHERE id = ?",
         [(stamp, i) for i in ids],
     )
     db.commit()
@@ -644,15 +661,17 @@ def top_shops(db, month: str, limit: int = 10) -> pd.DataFrame:
 
 
 def spending_frame(db) -> pd.DataFrame:
-    """All categorized money-out rows (for alerts and subscription detection)."""
-    return pd.read_sql_query(
+    """All categorized money-out rows (for alerts and subscription detection).
+    Rows whose date can't be read (e.g. a misread '2026-02-30' held for review) are left out."""
+    df = pd.read_sql_query(
         """SELECT id, statement_id, txn_date, COALESCE(merchant, description) AS shop, category, amount
            FROM transactions
            WHERE amount > 0 AND category IS NOT NULL AND category != ?""",
         db,
         params=(NOT_EXPENSE,),
-        parse_dates=["txn_date"],
     )
+    df["txn_date"] = pd.to_datetime(df.txn_date, format="%Y-%m-%d", errors="coerce")
+    return df.dropna(subset=["txn_date"])
 
 
 def counts(db) -> dict[str, int]:

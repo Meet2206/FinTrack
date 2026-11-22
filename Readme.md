@@ -17,7 +17,7 @@
   <img src="https://api.memegen.link/images/fine/Bank_balance_after_one_weekend/This_is_fine.gif" width="460" alt="This is fine dog: 'Bank balance after one weekend'">
 </p>
 
-[Plan](Plan.md) · [Architecture](Architecture.md) · [Backend](Backend.md) · [DB](DB.md)
+[Plan](Plan.md) · [Architecture](Architecture.md) · [Backend](Backend.md) · [DB](DB.md) · [Testing](TESTING.md) · [Reason](Reason.md)
 
 ---
 
@@ -152,6 +152,7 @@ Everything else (rent, restaurants, shopping…) goes to **Other**. It stays vis
 - ✅ **Automation**: drop PDFs in a folder and they're processed on their own
 - ✅ **Monthly summary** to Telegram (optional)
 - ✅ **Cost log**: see exactly what the AI cost you (spoiler: very little)
+- ✅ **206 automated tests** across 34 real-life statement scenarios, including deliberate AI mistakes it must catch ([TESTING.md](TESTING.md))
 - ✅ **Your data stays on your laptop.** Details in [Privacy](#-privacy).
 
 <p align="center">
@@ -380,7 +381,7 @@ Version 1 is one person, one laptop. The cat will have to wait.
 | `python cli.py forget ID` | Delete a statement and its rows |
 | `python cli.py backup` | Back up the database |
 | `python cli.py password add NAME` | Save a PDF password in the Keychain (`list`, `remove` too) |
-| `python -m pytest` | Run the 59 automated tests (free, no real APIs) |
+| `python -m pytest` | Run the 206 automated tests (free, no real APIs). See [TESTING.md](TESTING.md). |
 
 ---
 
@@ -419,6 +420,8 @@ Version 1 is one person, one laptop. The cat will have to wait.
 | [Architecture.md](Architecture.md) | How it fits together, where your data goes, and the design decisions |
 | [Backend.md](Backend.md) | Setup, every module explained, error handling, testing |
 | [DB.md](DB.md) | Every table and column, how duplicates and sync work, backups |
+| [TESTING.md](TESTING.md) | How it's tested: 34 real-life scenarios, fake statements, the bugs the tests caught, latest results |
+| [Reason.md](Reason.md) | **Why this and not that**: every decision (business rules, stack, database, algorithms, security) with its trade-offs |
 
 ---
 

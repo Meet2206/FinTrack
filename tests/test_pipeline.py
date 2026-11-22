@@ -187,6 +187,7 @@ def test_statement_spanning_two_months_fills_both_tabs(run_statement, db, settin
         update={
             "transactions": oct_part.transactions + nov_part.transactions,
             "closing_balance": nov_part.closing_balance,
+            "period_end": nov_part.period_end,  # the statement really covers Oct 1 – Nov 30
         }
     )
     run_statement(stmt=stmt)

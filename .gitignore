@@ -6,6 +6,8 @@ config.yaml
 # ── Your private financial data ──────────────────────────
 /data/
 *.pdf
+# …except the FAKE test statements, which are safe to share:
+!tests/fixtures/*.pdf
 tests/data/labeled.csv
 
 # ── Python ───────────────────────────────────────────────

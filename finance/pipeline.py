@@ -43,11 +43,11 @@ def read_statement(
     """Unlock, read and check one PDF without saving anything. Returns (statement, issues, pages)."""
     reader = pdf_tools.open_pdf(path, password)
     stmt = extract.extract_statement(reader, settings, on_call=on_call)
-    if not stmt.looks_like_statement or not stmt.transactions:
-        raise NotAStatement()
+    if not stmt.looks_like_statement:
+        raise NotAStatement()  # a real statement with zero transactions (a quiet month) is fine
     issues = reconcile.check(
         stmt.opening_balance, stmt.closing_balance, stmt.transactions, is_card=(stmt.kind == "card")
-    )
+    ) + reconcile.check_dates(stmt.transactions, stmt.period_start, stmt.period_end)
     return stmt, issues, len(reader.pages)
 
 
@@ -84,17 +84,21 @@ def process_statement(path: Path, settings: Settings, db, password: str | None =
         ledger.save_statement_details(db, sid, stmt, account_id, page_count=pages)
 
         sorted_by = categorize.categorize_statement(db, settings, sid, on_call=log_call)
-        alerts.scan(db, sid, settings)
+        try:
+            alerts.scan(db, sid, settings)
+        except Exception:  # alerts are a bonus: never let them fail a statement
+            log.exception("alert scan failed for statement %s", sid)
 
         status = "mismatch" if issues else "ready"
         ledger.set_status(db, sid, status, issues=issues)
         ledger.refresh_statement_statuses(db)
+        status = ledger.get_statement(db, sid)["status"]  # e.g. 'synced' if there was nothing to sync
         to_review = ledger.count_review(db, sid) if not issues else 0
         skipped = len(stmt.transactions) - new_rows
         message = f"Read {len(stmt.transactions)} transactions"
         message += f" ({skipped} already known from another statement)." if skipped else "."
         if issues:
-            message += " ⚠️ The numbers don't match the statement, so every row is on hold until you check it."
+            message += " ⚠️ Something doesn't match the statement, so every row is on hold until you check it."
         else:
             message += f" ✅ Balances match to the cent. {to_review} row(s) need your review."
         log.info(
@@ -116,7 +120,7 @@ def process_statement(path: Path, settings: Settings, db, password: str | None =
     except pdf_tools.BadPdf:
         return _fail(db, sid, "This file isn't a readable PDF.")
     except NotAStatement:
-        return _fail(db, sid, "This doesn't look like a bank or card statement (no transactions found).")
+        return _fail(db, sid, "This doesn't look like a bank or card statement.")
     except extract.ChunkTooLong:
         return _fail(db, sid, "A single page has too many rows for the AI to read in one go.")
     except extract.AIDeclined:
@@ -172,7 +176,7 @@ def recheck_statement(db, settings: Settings, statement_id: int) -> list[str]:
         s["closing_balance"],
         txns,
         is_card=ledger.statement_kind(db, statement_id) == "card",
-    )
+    ) + reconcile.check_dates(txns, s["period_start"], s["period_end"])
     if s["status"] == "mismatch":
         if issues:
             ledger.set_status(db, statement_id, "mismatch", issues=issues)

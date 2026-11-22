@@ -94,39 +94,55 @@ def month_rows(month: str) -> list[tuple]:
 
 
 def build_statement(
-    month: str, opening: float = 2500.00, last4: str = "1234", rows: list[tuple] | None = None
+    month: str,
+    opening: float = 2500.00,
+    last4: str = "1234",
+    rows: list[tuple] | None = None,
+    *,
+    kind: str = "bank",
+    currency: str = "USD",
+    bank_name: str = BANK,
+    running_balance: bool = True,
+    opening_printed: bool = True,
+    closing_printed: bool = True,
 ) -> StatementChunk:
-    """The 'truth' for a fake statement: what a perfect reader would extract."""
+    """The 'truth' for a fake statement: what a perfect reader would extract.
+
+    kind="card": a credit card statement, where the balance is what you owe,
+    so spending makes it go UP and payments make it go down.
+    """
     year, mon = map(int, month.split("-"))
+    sign = -1 if kind == "card" else 1
     balance, txns = opening, []
     for day, description, out, money_in in rows if rows is not None else month_rows(month):
-        balance = round(balance + (money_in or 0) - (out or 0), 2)
+        balance = round(balance + sign * ((money_in or 0) - (out or 0)), 2)
         txns.append(
             Txn(
                 date=f"{year:04d}-{mon:02d}-{day:02d}",
                 description=description,
                 debit=out,
                 credit=money_in,
-                balance=balance,
+                balance=balance if running_balance else None,
             )
         )
     last_day = 30 if mon in (4, 6, 9, 11) else 28 if mon == 2 else 31
     return StatementChunk(
         looks_like_statement=True,
-        kind="bank",
-        bank_name=BANK,
+        kind=kind,
+        bank_name=bank_name,
         account_last4=last4,
-        currency="USD",
+        currency=currency,
         period_start=f"{year:04d}-{mon:02d}-01",
         period_end=f"{year:04d}-{mon:02d}-{last_day:02d}",
-        opening_balance=opening,
-        closing_balance=balance,
+        opening_balance=opening if opening_printed else None,
+        closing_balance=balance if closing_printed else None,
         transactions=txns,
     )
 
 
 def _money(x: float | None) -> str:
-    return f"{x:,.2f}" if x else ""
+    """Blank when there's no amount in this column; 0.00 is printed (e.g. a waived fee)."""
+    return "" if x is None else f"{x:,.2f}"
 
 
 def _nice(iso: str) -> str:
@@ -136,14 +152,16 @@ def _nice(iso: str) -> str:
 def write_pdf(
     stmt: StatementChunk, path: Path, statement_no: str, password: str | None = None, rows_per_page: int = 16
 ) -> Path:
-    """Draw a realistic-looking statement PDF (optionally password-protected)."""
+    """Draw a realistic-looking statement PDF (optionally password-protected).
+    Prints exactly what `stmt` says: balances that are None are simply not printed."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     c = canvas.Canvas(str(path), pagesize=A4)
     _, height = A4
     txns = stmt.transactions
     pages = [txns[i : i + rows_per_page] for i in range(0, len(txns), rows_per_page)] or [[]]
-    balance = stmt.opening_balance
+    carried = stmt.opening_balance
+    account_label = "Card ending" if stmt.kind == "card" else "Account ending"
     for page_no, page_rows in enumerate(pages, start=1):
         y = height - 50
         c.setFont("Helvetica-Bold", 15)
@@ -153,7 +171,7 @@ def write_pdf(
         c.drawString(
             50,
             y - 29,
-            f"Account ending {stmt.account_last4}    Period: {_nice(stmt.period_start)} "
+            f"{account_label} {stmt.account_last4}    Period: {_nice(stmt.period_start)} "
             f"to {_nice(stmt.period_end)}    Currency: {stmt.currency}",
         )
         y -= 60
@@ -165,21 +183,30 @@ def write_pdf(
         c.line(50, y - 4, 555, y - 4)
         y -= 18
         c.setFont("Helvetica", 9)
-        label = "Opening balance" if page_no == 1 else "Balance brought forward"
-        c.drawString(125, y, label)
-        c.drawRightString(555, y, f"{balance:,.2f}")
-        y -= 16
+        if page_no == 1 and stmt.opening_balance is not None:
+            c.drawString(125, y, "Opening balance")
+            c.drawRightString(555, y, f"{stmt.opening_balance:,.2f}")
+            y -= 16
+        elif page_no > 1 and carried is not None:
+            c.drawString(125, y, "Balance brought forward")
+            c.drawRightString(555, y, f"{carried:,.2f}")
+            y -= 16
         for t in page_rows:
-            balance = round(balance + (t.credit or 0) - (t.debit or 0), 2)
             c.drawString(50, y, _nice(t.date))
             c.drawString(125, y, t.description)
             c.drawRightString(410, y, _money(t.debit))
             c.drawRightString(480, y, _money(t.credit))
-            c.drawRightString(555, y, f"{balance:,.2f}")
+            if t.balance is not None:
+                c.drawRightString(555, y, f"{t.balance:,.2f}")
+                carried = t.balance
             y -= 16
         c.setFont("Helvetica-Bold", 9)
-        c.drawString(125, y - 4, "Closing balance" if page_no == len(pages) else "Balance carried forward")
-        c.drawRightString(555, y - 4, f"{balance:,.2f}")
+        if page_no == len(pages) and stmt.closing_balance is not None:
+            c.drawString(125, y - 4, "Closing balance")
+            c.drawRightString(555, y - 4, f"{stmt.closing_balance:,.2f}")
+        elif page_no < len(pages) and carried is not None and page_rows and page_rows[-1].balance is not None:
+            c.drawString(125, y - 4, "Balance carried forward")
+            c.drawRightString(555, y - 4, f"{carried:,.2f}")
         c.showPage()
     c.save()
 
@@ -196,6 +223,7 @@ def write_pdf(
 FAKE_RULES = [  # (regex, merchant, category, confidence)
     (r"SALARY|PAYROLL|INTEREST", None, "Not an expense", "high"),
     (r"CREDIT CARD PAYMENT", "Card bill", "Not an expense", "high"),
+    (r"PAYMENT RECEIVED", "Card payment", "Not an expense", "high"),
     (r"FRSHMRT", "Fresh Mart", "Grocery", "high"),
     (r"GREEN GROCER", "Green Grocer Co", "Grocery", "high"),
     (r"STREAMFLIX", "StreamFlix", "Subscriptions", "high"),
@@ -219,36 +247,42 @@ def fake_label(description: str) -> tuple[str, str, str]:
     return description.title()[:30], "Other", "low"
 
 
+def fake_ask_claude(batch, corrections, model, on_call):
+    """Pretend categorizer: same signature as categorize.ask_claude, rules from FAKE_RULES."""
+    on_call(AICall("categorize", "demo", 0, 0, 0, "end_turn"))
+    labels = {}
+    for n, r in enumerate(batch, start=1):
+        merchant, category, confidence = fake_label(r["description"])
+        labels[n] = categorize.Labeled(n=n, merchant=merchant, category=category, confidence=confidence)
+    return labels
+
+
+def not_a_statement() -> StatementChunk:
+    return StatementChunk(
+        looks_like_statement=False,
+        kind=None,
+        bank_name=None,
+        account_last4=None,
+        currency=None,
+        period_start=None,
+        period_end=None,
+        opening_balance=None,
+        closing_balance=None,
+        transactions=[],
+    )
+
+
 @contextmanager
 def fake_claude(statements: dict[str, StatementChunk]) -> Iterator[None]:
     """While active, 'Claude' reads demo PDFs perfectly (by statement number) and sorts with FAKE_RULES."""
 
     def fake_extract_statement(reader, settings, on_call):
-        text = reader.pages[0].extract_text() or ""
+        text = reader.pages[0].extract_text() or "" if reader.pages else ""
         match = re.search(r"Statement no\.\s*(\S+)", text)
         on_call(AICall("extract", "demo", 0, 0, 0, "end_turn"))
         if not match or match.group(1) not in statements:
-            return StatementChunk(
-                looks_like_statement=False,
-                kind=None,
-                bank_name=None,
-                account_last4=None,
-                currency=None,
-                period_start=None,
-                period_end=None,
-                opening_balance=None,
-                closing_balance=None,
-                transactions=[],
-            )
+            return not_a_statement()
         return statements[match.group(1)]
-
-    def fake_ask_claude(batch, corrections, model, on_call):
-        on_call(AICall("categorize", "demo", 0, 0, 0, "end_turn"))
-        labels = {}
-        for n, r in enumerate(batch, start=1):
-            merchant, category, confidence = fake_label(r["description"])
-            labels[n] = categorize.Labeled(n=n, merchant=merchant, category=category, confidence=confidence)
-        return labels
 
     saved = extract.extract_statement, categorize.ask_claude
     extract.extract_statement, categorize.ask_claude = fake_extract_statement, fake_ask_claude

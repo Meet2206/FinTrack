@@ -71,8 +71,9 @@ def keyword_category(description: str, keywords: dict[str, list[str]]) -> str | 
 def categorize_statement(
     db, settings: Settings, statement_id: int, on_call: Callable[[costs.AICall], None]
 ) -> dict[str, int]:
-    """Categorize every uncategorized row of a statement. Returns how many rows each method sorted."""
-    rows = ledger.uncategorized(db, statement_id)
+    """Categorize this statement's rows, plus any left uncategorized by an earlier failed attempt.
+    Returns how many rows each method sorted."""
+    rows = ledger.uncategorized(db)
     rules = ledger.merchant_rules(db)  # {merchant_key: (merchant, category)}
     updates, for_ai, used_rules = [], [], []
     tally = {"rule": 0, "keyword": 0, "ai": 0}

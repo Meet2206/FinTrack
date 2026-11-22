@@ -1,6 +1,6 @@
 # 🗺️ Project Plan: "Where Did My Money Go?"
 
-[Readme](Readme.md) · **Plan** · [Architecture](Architecture.md) · [Backend](Backend.md) · [DB](DB.md)
+[Readme](Readme.md) · **Plan** · [Architecture](Architecture.md) · [Backend](Backend.md) · [DB](DB.md) · [Testing](TESTING.md) · [Reason](Reason.md)
 
 | | |
 |---|---|

@@ -43,7 +43,7 @@ def sync(
 
     tabs = {(r["category"], r["month"]) for r in changed if r["category"] in enabled}
     tabs |= {
-        (r["synced_category"], r["month"])  # the tab a row moved away from
+        (r["synced_category"], r["synced_month"] or r["month"])  # the tab a row moved away from
         for r in changed
         if r["synced_category"] in enabled
     }

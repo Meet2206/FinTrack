@@ -78,3 +78,48 @@ def test_dashboard_shows_alerts_and_can_dismiss(app_env):
     assert before > 0 and any(m.label == "Spent" for m in at.metric)
     next(b for b in at.button if b.label == "Dismiss").click().run()
     assert len(ledger.open_alerts(app_env)) == before - 1
+
+
+@pytest.fixture
+def mismatch_env(settings, db, tmp_path, monkeypatch):
+    """One statement whose numbers didn't add up (the AI 'misread' an amount)."""
+    from finance import pipeline
+    from finance.demo import build_statement, fake_claude, write_pdf
+
+    truth = build_statement("2026-11")
+    misread = truth.model_copy(deep=True)
+    misread.transactions[2].debit = 1.0
+    with fake_claude({"MIS-1": misread}):
+        pipeline.process_statement(write_pdf(truth, tmp_path / "nov.pdf", "MIS-1"), settings, db)
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        yaml.safe_dump({"db_path": str(settings.db_path), "backups_dir": str(settings.backups_dir)})
+    )
+    monkeypatch.setenv("WDMMG_CONFIG", str(cfg))
+    return db
+
+
+def test_statements_page_shows_the_problem_and_approves(mismatch_env):
+    at = AppTest.from_file(str(ROOT / "pages/4_Statements.py"), default_timeout=60).run()
+    assert any("Row 3" in m.value for m in at.markdown), "the exact problem row is shown"
+    next(b for b in at.button if "approve" in b.label).click().run()
+    assert not at.exception
+    assert ledger.get_statement(mismatch_env, 1)["status"] == "ready"
+
+
+def test_sidebar_warns_about_statements_that_dont_add_up(mismatch_env):
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=60).run()
+    assert any("don't add up" in w.value for w in at.sidebar.warning)
+
+
+def test_setup_page_backup_button(app_env, settings):
+    at = AppTest.from_file(str(ROOT / "pages/5_Setup.py"), default_timeout=60).run()
+    next(b for b in at.button if "Back up" in b.label).click().run()
+    assert not at.exception and list(settings.backups_dir.glob("ledger-*.db"))
+
+
+def test_transactions_page_filters(app_env):
+    at = AppTest.from_file(str(ROOT / "pages/3_Transactions.py"), default_timeout=60).run()
+    at.selectbox[1].select("Travel").run()
+    assert not at.exception
+    assert all(c == "Travel" for c in at.dataframe[0].value["category"]) if at.dataframe else True

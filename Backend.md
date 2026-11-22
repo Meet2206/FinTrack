@@ -1,6 +1,6 @@
 # ⚙️ Backend
 
-[Readme](Readme.md) · [Plan](Plan.md) · [Architecture](Architecture.md) · **Backend** · [DB](DB.md)
+[Readme](Readme.md) · [Plan](Plan.md) · [Architecture](Architecture.md) · **Backend** · [DB](DB.md) · [Testing](TESTING.md) · [Reason](Reason.md)
 
 | | |
 |---|---|
@@ -68,7 +68,7 @@ reportlab
 
 ```
 meet-project/
-├── Readme.md  Plan.md  Architecture.md  Backend.md  DB.md
+├── Readme.md  Plan.md  Architecture.md  Backend.md  DB.md  TESTING.md  Reason.md
 ├── app.py                      # Web app: Upload page (home)
 ├── ui_common.py                # Shared page setup + sidebar (sync button, counts)
 ├── pages/
@@ -93,7 +93,7 @@ meet-project/
 │   ├── ids.py                  # Transaction and merchant fingerprints
 │   ├── categorize.py           # Rules → keywords → Claude
 │   ├── ledger.py               # All database reads and writes
-│   ├── migrations/001_init.sql # Database tables (see DB.md)
+│   ├── migrations/             # 001_init.sql, 002_synced_month.sql (see DB.md)
 │   ├── sheets.py               # Google Sheets mirror
 │   ├── sync.py                 # Decide which tabs to rebuild, then rebuild them
 │   ├── alerts.py               # Double charges, price increases, forgotten subscriptions…
@@ -106,13 +106,25 @@ meet-project/
 ├── scripts/
 │   ├── demo.py                 # Build a no-key demo in demo/
 │   ├── check_setup.py          # Same as: python cli.py check
+│   ├── make_test_fixtures.py   # Re-create tests/fixtures/*.pdf
 │   ├── make_fake_statement.py  # Generate a fake statement PDF (never use real ones)
 │   └── eval_categories.py      # Measure categorization accuracy (real API)
-├── tests/                      # 59 tests: python -m pytest
-│   ├── conftest.py             # Temp database, fake Google Sheets, pretend Claude
+├── conftest.py                 # The plain-English report: python -m pytest --report TESTING.md
+├── tests/                      # 206 tests (+19 live): see TESTING.md
+│   ├── conftest.py             # Temp database, fake sheets, in-memory Keychain
+│   ├── scenarios.py            # 34 real-life statement scenarios + pretend Claudes
+│   ├── fake_gspread.py         # An in-memory imitation of Google Sheets
+│   ├── test_scenarios.py       # Every scenario end to end, plus multi-upload cases
 │   ├── test_core.py            # Math check, fingerprints, rules, settings, PDFs
-│   ├── test_pipeline.py        # PDF → pipeline → database → sheets, alerts
-│   ├── test_app.py             # Every web page renders and its buttons work
+│   ├── test_pipeline.py        # PDF → database → sheets flows
+│   ├── test_categorization.py  # Rules, keywords, AI, review, batching
+│   ├── test_sheets_mirror.py   # The real Sheets writer + database upgrades
+│   ├── test_alerts.py          # Every alert rule on both sides of its threshold
+│   ├── test_cli.py             # Every command
+│   ├── test_settings_and_automation.py
+│   ├── test_app.py             # Every web page and its buttons
+│   ├── test_live.py            # The real Claude (opt-in)
+│   ├── fixtures/               # 18 fake statement PDFs + README (safe to share)
 │   └── data/labeled.example.csv
 └── data/                       # 🔒 Private, never committed
     ├── inbox/                  # Drop PDFs here (done/ and failed/ inside)
@@ -312,6 +324,7 @@ pipeline.process_statement(pdf)
  │    │    └─ too long? split the group in half and retry
  │    └─ extract.merge()              one statement, rows in order
  ├─ reconcile.check()                 math OK? list of issues
+ ├─ reconcile.check_dates()           every date real and inside the period (±7 days)?
  ├─ ledger.upsert_account()
  ├─ ids.transaction_ids()             a fingerprint for every row
  ├─ ledger.save_transactions()        duplicates silently skipped
@@ -637,6 +650,8 @@ def check(opening, closing, txns, is_card: bool = False, tolerance: float = 0.01
     return issues
 ```
 
+**Dates are checked too.** Balances can't reveal a misread *date*, so `check_dates()` flags any date that isn't real ("2026-02-30") or falls outside the statement period by more than 7 days (card statements can include purchases from a few days before). Tests found this gap; see [TESTING.md §9](TESTING.md#9-bugs-the-tests-caught).
+
 **Example:**
 ```
 Opening balance 1,000.00
@@ -694,6 +709,8 @@ def merchant_key(description: str) -> str:
 > 3. **Ask Claude:** about 100 unknown rows per request. Your past corrections are included, so Claude learns your preferences.
 >
 > Claude also says how sure it is (high, medium or low). Medium and low go to your review queue.
+>
+> Each run sorts **every** row still waiting for a category, not just the new statement's. If an earlier attempt failed half-way and you upload a freshly downloaded copy, the rows the first attempt saved still get sorted.
 
 ```python
 # finance/categorize.py
@@ -1466,13 +1483,14 @@ Catch errors from **most specific to least specific** (`RateLimitError` before `
 ### Run them
 
 ```bash
-python -m pytest                 # 59 tests, about 5 seconds, free (no real APIs)
-python -m pytest -m live         # opt-in tests against the real Claude API (costs cents)
+python -m pytest                 # 206 tests, about 10 seconds, free (no real APIs)
+python -m pytest --report TESTING.md   # …and refresh the results in TESTING.md
+python -m pytest -m live         # opt-in: the fixtures through the real Claude (~$0.50)
 python scripts/demo.py           # build a no-key demo, then:
 WDMMG_CONFIG=demo/config.yaml streamlit run app.py --server.address localhost
 ```
 
-The tests use **fake statements** (`finance/demo.py` draws them with reportlab), a **pretend Claude** that reads those fake PDFs perfectly, and a **fake Google Sheets** that lives in memory. The real code runs everywhere else: PDF unlocking, the math check, the database, categorization rules, sync decisions, alerts and every web page.
+**Everything about testing is explained in [TESTING.md](TESTING.md).** In short: the tests use **fake statements** (`finance/demo.py` draws them with reportlab), a **pretend Claude** that reads those fake PDFs perfectly, and a **fake Google Sheets** that lives in memory. The real code runs everywhere else: PDF unlocking, the math check, the database, categorization rules, sync decisions, alerts and every web page.
 
 ### Test pyramid
 

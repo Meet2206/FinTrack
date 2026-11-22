@@ -1,12 +1,12 @@
 # 🗄️ Database (DB)
 
-[Readme](Readme.md) · [Plan](Plan.md) · [Architecture](Architecture.md) · [Backend](Backend.md) · **DB**
+[Readme](Readme.md) · [Plan](Plan.md) · [Architecture](Architecture.md) · [Backend](Backend.md) · **DB** · [Testing](TESTING.md) · [Reason](Reason.md)
 
 | | |
 |---|---|
 | **What this document is** | Everything about where the app keeps its records: each table, what every column means, how duplicates are prevented, how the Google Sheets stay in sync, backups and privacy. |
 | **Who it's for** | Everyone. Each section starts with a 💡 plain-English summary, followed by the details. |
-| **The actual file** | `finance/migrations/001_init.sql` (copied in full in [§13](#13-the-full-schema)) |
+| **The actual files** | `finance/migrations/001_init.sql` + `002_synced_month.sql` (both in full in [§13](#13-the-full-schema)). Current version: 2. |
 
 ---
 
@@ -164,6 +164,7 @@ An account is identified by **type + last 4 digits**. Bank names aren't used, be
 | `needs_review` | 0/1 | Waiting for your OK | `0` |
 | `review_reason` | text | Why it's waiting | `AI wasn't sure` |
 | `synced_category` | text | The category it had at the last sync (which sheet it's in) | `Grocery` |
+| `synced_month` | text | The month tab it was last written to (added in upgrade 002) | `2026-11` |
 | `synced_at` | text | When Sheets last matched this row. **Empty = Sheets needs updating.** | `2026-11-22 14:10:02` |
 | `created_at`, `updated_at` | text | Timestamps | |
 
@@ -277,7 +278,7 @@ Built from: account type + last 4 digits, date, money out, money in, and the des
 
 ## 8. How the Google Sheets stay in sync
 
-> 💡 Every transaction carries two little notes: **"which sheet am I in?"** (`synced_category`) and **"is the sheet up to date with me?"** (`synced_at`). When anything about a row changes, we erase `synced_at`. The next sync finds every row with an empty `synced_at` and rebuilds the month tabs they belong to, *and* the tab they used to belong to.
+> 💡 Every transaction carries little notes: **"which sheet and month tab am I in?"** (`synced_category`, `synced_month`) and **"is the sheet up to date with me?"** (`synced_at`). When anything about a row changes, we erase `synced_at`. The next sync finds every row with an empty `synced_at` and rebuilds the month tabs they belong to, *and* the tab they used to belong to.
 
 ### Worked example
 
@@ -291,8 +292,8 @@ Built from: account type + last 4 digits, date, money out, money in, and the des
 ### The rules
 1. A row is **eligible for Sheets** when `needs_review = 0` and it has a category.
 2. A row **needs syncing** when `synced_at` is empty.
-3. Sync rebuilds tabs `(category, month)` and `(synced_category, month)` for every row that needs syncing, but only for categories that have a sheet.
-4. Afterwards: `synced_at = now`, `synced_category = category`.
+3. Sync rebuilds tabs `(category, month)` and `(synced_category, synced_month)` for every row that needs syncing, but only for categories that have a sheet. (So fixing a misread **date** also cleans the old month's tab.)
+4. Afterwards: `synced_at = now`, `synced_category = category`, `synced_month = month`.
 5. Rows in categories without a sheet (e.g. `Not an expense`) are simply marked as synced.
 6. A statement becomes `synced` once none of its rows need syncing.
 
@@ -379,7 +380,7 @@ SELECT kind, message, created_at FROM alerts WHERE dismissed_at IS NULL ORDER BY
 
 > 💡 When a future version needs a new column or table, we don't edit the database by hand. We add a numbered "upgrade script", and the app applies any it hasn't applied yet, in order, when it starts.
 
-- Upgrade scripts live in `finance/migrations/`: `001_init.sql`, then `002_add_budgets.sql`, …
+- Upgrade scripts live in `finance/migrations/`: `001_init.sql` (the tables below) and `002_synced_month.sql` (adds `transactions.synced_month`, so a row moved to another month leaves no stale copy in the old tab). The current version is **2**.
 - The database remembers its version number (SQLite's built-in `PRAGMA user_version`).
 - On start, `ledger.migrate()` runs every script with a number higher than the stored version, then updates the version.
 - **Never edit a script that has already run.** Add a new one instead.
@@ -420,6 +421,16 @@ Note: if a transaction appeared in two overlapping statements, it belongs to the
 ---
 
 ## 13. The full schema
+
+Upgrade 002 then adds one column:
+
+```sql
+-- finance/migrations/002_synced_month.sql
+ALTER TABLE transactions ADD COLUMN synced_month TEXT;
+UPDATE transactions SET synced_month = month WHERE synced_category IS NOT NULL;
+```
+
+The original tables (version 1):
 
 ```sql
 -- finance/migrations/001_init.sql

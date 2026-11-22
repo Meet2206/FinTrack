@@ -10,6 +10,8 @@ makes it go up.
 
 from __future__ import annotations
 
+from datetime import date, timedelta
+
 TOLERANCE = 0.01
 
 
@@ -34,4 +36,32 @@ def check(opening, closing, txns, is_card: bool = False, tolerance: float = TOLE
             balance = t.balance  # resync, so one bad row doesn't flag every row after it
     if closing is not None and abs(balance - closing) > tolerance:
         issues.append(f"Closing balance: worked out {balance:,.2f}, statement shows {closing:,.2f}")
+    return issues
+
+
+DATE_SLACK_DAYS = 7  # card statements can include purchases made a few days before the period
+
+
+def check_dates(
+    txns, period_start: str | None, period_end: str | None, slack_days: int = DATE_SLACK_DAYS
+) -> list[str]:
+    """Balances can't reveal a misread DATE, so check every date is real and inside the
+    statement period (give or take a week). A row outside it would land in the wrong month tab."""
+    issues: list[str] = []
+    try:
+        start = date.fromisoformat(period_start) - timedelta(days=slack_days) if period_start else None
+        end = date.fromisoformat(period_end) + timedelta(days=slack_days) if period_end else None
+    except ValueError:
+        start = end = None
+    for row_number, t in enumerate(txns, start=1):
+        try:
+            d = date.fromisoformat(t.date)
+        except ValueError:
+            issues.append(f"Row {row_number} ('{t.description[:30]}'): '{t.date}' isn't a valid date")
+            continue
+        if (start and d < start) or (end and d > end):
+            issues.append(
+                f"Row {row_number} ('{t.description[:30]}'): date {t.date} is outside the "
+                f"statement period ({period_start} to {period_end})"
+            )
     return issues

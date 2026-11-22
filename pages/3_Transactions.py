@@ -27,7 +27,7 @@ before = ledger.transactions_frame(
 )
 st.caption(
     f"{len(before)} row(s). Edit **Shop**, **Category** or **Amount**, then save. "
-    "Edit the amount only to fix a misread number (compare with the PDF)."
+    "Edit the amount or date only to fix a misread value (compare with the PDF)."
 )
 after = st.data_editor(
     before,
@@ -36,7 +36,7 @@ after = st.data_editor(
         "statement_id": None,
         "row_number": None,
         "synced_at": None,
-        "txn_date": st.column_config.TextColumn("Date"),
+        "txn_date": st.column_config.TextColumn("Date (YYYY-MM-DD)"),
         "description": st.column_config.TextColumn("Description (as printed)", width="large"),
         "merchant": st.column_config.TextColumn("Shop"),
         "amount": st.column_config.NumberColumn("Amount (+ out / − in)", format="%.2f"),
@@ -46,14 +46,18 @@ after = st.data_editor(
         "needs_review": st.column_config.CheckboxColumn("Needs review"),
         "review_reason": st.column_config.TextColumn("Why"),
     },
-    disabled=["txn_date", "description", "confidence", "category_source", "needs_review", "review_reason"],
+    disabled=["description", "confidence", "category_source", "needs_review", "review_reason"],
     hide_index=True,
     width="stretch",
     key="transactions_editor",
 )
 remember = st.checkbox("Remember category changes for these shops", value=True)
 if st.button("Save changes", type="primary"):
-    changed, statements = ledger.apply_user_edits(db, before, pd.DataFrame(after), remember)
+    try:
+        changed, statements = ledger.apply_user_edits(db, before, pd.DataFrame(after), remember)
+    except ledger.EditError as e:
+        st.error(str(e))
+        st.stop()
     for sid in statements:  # an amount was fixed: re-check that statement's math
         issues = pipeline.recheck_statement(db, settings, sid)
         if issues:
