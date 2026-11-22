@@ -1,0 +1,21 @@
+[project]
+name = "where-did-my-money-go"
+version = "1.0.0"
+description = "Upload a bank statement PDF; get categorized expenses in Google Sheets."
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+markers = ["live: calls the real Claude API (costs a few cents)"]
+addopts = "-m 'not live'"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["E501", "B008"]  # B008: Typer declares options in defaults by design

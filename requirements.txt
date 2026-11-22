@@ -1,0 +1,19 @@
+# Where Did My Money Go? Python libraries
+# Install with:  pip install -r requirements.txt
+anthropic>=2.12
+pydantic>=2.10
+pypdf[crypto]>=7.0
+gspread>=6.2
+pandas>=3.0
+plotly>=7.0
+streamlit>=1.67
+typer>=0.29
+pyyaml>=6.0
+python-dotenv>=1.2
+keyring>=25.0
+watchdog>=7.0
+reportlab>=5.0
+
+# Development
+pytest>=8.0
+ruff>=0.8

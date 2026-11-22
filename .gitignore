@@ -1,0 +1,20 @@
+# ── Secrets: never commit these ──────────────────────────
+.env
+service_account.json
+config.yaml
+
+# ── Your private financial data ──────────────────────────
+/data/
+*.pdf
+tests/data/labeled.csv
+
+# ── Python ───────────────────────────────────────────────
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+
+# ── Demo (python scripts/demo.py) ─────────────────────────
+demo/

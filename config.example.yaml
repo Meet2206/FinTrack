@@ -1,0 +1,51 @@
+# Where Did My Money Go? settings
+# Copy this file to config.yaml and fill it in:  cp config.example.yaml config.yaml
+# Settings only. Secrets (API keys) go in .env, PDF passwords in the Keychain.
+
+# ─── Google Sheets ───────────────────────────────────────────────────────
+# Spreadsheet IDs: the long code in each sheet's URL between /d/ and /edit
+# Leave a category out (or the whole block empty) until you've set it up.
+sheets:
+  Grocery: ""
+  Travel: ""
+  Subscriptions: ""
+  Investments: ""
+  Savings: ""
+  # Other: ""                     # remove the # to turn on the optional 6th sheet
+
+service_account_file: service_account.json
+
+# ─── Money ───────────────────────────────────────────────────────────────
+currency: USD                     # your statements' currency (USD, EUR, INR, GBP…)
+
+# ─── AI ──────────────────────────────────────────────────────────────────
+model: claude-opus-5-5
+pages_per_chunk: 3                # pages sent to Claude per request
+categorize_batch_size: 100        # transactions per categorization request
+pricing_per_million_tokens:       # only used for the cost log; check current prices
+  claude-opus-5-5: { input: 4.00, output: 20.00 }
+
+# ─── Keyword rules: checked BEFORE asking the AI ─────────────────────────
+# Whole words, any capitalization. Checked top to bottom; first match wins.
+keywords:
+  Subscriptions: [netflix, spotify, icloud, adobe, gym]
+  Travel: [uber, lyft, airline, airways, railway, metro, hotel, fuel, parking, toll]
+  Grocery: [supermarket, grocery, groceries, hypermarket]
+  Investments: [mutual fund, sip, brokerage, etf]
+  Savings: [fixed deposit, recurring deposit]
+  Not an expense: [salary, payroll]   # also add your credit card's bill-payment wording here
+
+# ─── Review ──────────────────────────────────────────────────────────────
+review:
+  review_if_confidence: [low, medium]   # AI answers at these levels wait for you
+  large_charge: 200                      # first-ever charge from a shop above this → alert
+
+# ─── Automation ──────────────────────────────────────────────────────────
+auto_sync: false                  # inbox/watch: sync to Google Sheets right after processing
+
+# ─── Files (relative to this config file) ────────────────────────────────
+db_path: data/ledger.db
+statements_dir: data/statements
+backups_dir: data/backups
+inbox_dir: data/inbox
+logs_dir: data/logs
