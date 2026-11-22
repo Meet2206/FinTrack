@@ -16,7 +16,7 @@ import anthropic
 import pydantic
 from pydantic import BaseModel, Field
 
-from finance import costs
+from finance import costs, prompts
 from finance.pdf_tools import page_groups, pages_as_pdf
 
 _client: anthropic.Anthropic | None = None
@@ -69,18 +69,8 @@ class StatementChunk(BaseModel):
     transactions: list[Txn]
 
 
-EXTRACT_PROMPT = """You read bank and credit card statement pages and copy out the transactions.
-
-Rules:
-- List every transaction row on these pages, in the order printed.
-- Skip rows that are not transactions: 'balance brought forward', 'carried forward',
-  page totals, subtotals and repeated table headers.
-- Copy amounts exactly as printed. Never calculate, round or guess a number.
-- Write dates as YYYY-MM-DD. Use the statement period to work out the year, and
-  whether dates are printed day-first or month-first.
-- If a description wraps onto several lines, join it into one line.
-- For the account or card number, return only the last 4 digits.
-- Use null for anything not shown on these pages."""
+# The instructions Claude follows: edit them in prompts/app/extract-statement.md
+EXTRACT_PROMPT = prompts.load("extract-statement")
 
 
 class ChunkTooLong(Exception):

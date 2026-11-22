@@ -1,6 +1,6 @@
 # ⚙️ Backend
 
-[Readme](Readme.md) · [Plan](Plan.md) · [Architecture](Architecture.md) · **Backend** · [DB](DB.md) · [Testing](TESTING.md) · [Reason](Reason.md)
+[Readme](Readme.md) · [Plan](Plan.md) · [Architecture](Architecture.md) · **Backend** · [DB](DB.md) · [Testing](TESTING.md) · [Reason](Reason.md) · [Prompts](prompts/README.md)
 
 | | |
 |---|---|
@@ -69,6 +69,13 @@ reportlab
 ```
 meet-project/
 ├── Readme.md  Plan.md  Architecture.md  Backend.md  DB.md  TESTING.md  Reason.md
+├── CLAUDE.md                   # Loads prompts/PROJECT_CONTEXT.md into every Claude Code session
+├── prompts/
+│   ├── README.md               # What's here + moving to another laptop
+│   ├── PROJECT_CONTEXT.md      # The handoff: everything an AI needs to continue the project
+│   └── app/                    # 🟢 LIVE prompts the app sends to Claude (edit text between the markers)
+│       ├── extract-statement.md
+│       └── categorize-transactions.md
 ├── app.py                      # Web app: Upload page (home)
 ├── ui_common.py                # Shared page setup + sidebar (sync button, counts)
 ├── pages/
@@ -89,6 +96,7 @@ meet-project/
 │   ├── config.py               # Load and validate settings
 │   ├── pdf_tools.py            # Fingerprint, unlock (Keychain), split PDFs
 │   ├── extract.py              # Claude reads pages → transactions
+│   ├── prompts.py              # Loads the AI's instructions from prompts/app/*.md
 │   ├── reconcile.py            # Check the math
 │   ├── ids.py                  # Transaction and merchant fingerprints
 │   ├── categorize.py           # Rules → keywords → Claude
@@ -108,9 +116,10 @@ meet-project/
 │   ├── check_setup.py          # Same as: python cli.py check
 │   ├── make_test_fixtures.py   # Re-create tests/fixtures/*.pdf
 │   ├── make_fake_statement.py  # Generate a fake statement PDF (never use real ones)
-│   └── eval_categories.py      # Measure categorization accuracy (real API)
+│   ├── eval_categories.py      # Measure categorization accuracy (real API)
+│   └── check_doc_links.py      # Check every link between the docs
 ├── conftest.py                 # The plain-English report: python -m pytest --report TESTING.md
-├── tests/                      # 206 tests (+19 live): see TESTING.md
+├── tests/                      # 210 tests (+19 live): see TESTING.md
 │   ├── conftest.py             # Temp database, fake sheets, in-memory Keychain
 │   ├── scenarios.py            # 34 real-life statement scenarios + pretend Claudes
 │   ├── fake_gspread.py         # An in-memory imitation of Google Sheets
@@ -474,7 +483,7 @@ import anthropic
 import pydantic
 from pydantic import BaseModel, Field
 
-from finance import costs
+from finance import costs, prompts
 from finance.pdf_tools import page_groups, pages_as_pdf
 
 client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from the environment
@@ -505,18 +514,9 @@ class StatementChunk(BaseModel):
     transactions: list[Txn]
 
 
-EXTRACT_PROMPT = """You read bank and credit card statement pages and copy out the transactions.
-
-Rules:
-- List every transaction row on these pages, in the order printed.
-- Skip rows that are not transactions: 'balance brought forward', 'carried forward',
-  page totals, subtotals and repeated table headers.
-- Copy amounts exactly as printed. Never calculate, round or guess a number.
-- Write dates as YYYY-MM-DD. Use the statement period to work out the year, and
-  whether dates are printed day-first or month-first.
-- If a description wraps onto several lines, join it into one line.
-- For the account or card number, return only the last 4 digits.
-- Use null for anything not shown on these pages."""
+# The words Claude follows live in prompts/app/extract-statement.md (between the markers),
+# so they can be read and improved without touching code. See prompts/app/ for the full text.
+EXTRACT_PROMPT = prompts.load("extract-statement")
 
 
 class ChunkTooLong(Exception):
@@ -615,6 +615,7 @@ def merge(chunks: list[StatementChunk]) -> StatementChunk:
 | `looks_like_statement` field | Lets us politely reject a random PDF (a menu, a ticket) instead of producing garbage |
 | Last 4 digits only | The full account number never enters our database or Google Sheets |
 | "Never calculate" in the prompt | We want copied numbers, not computed ones. The *code* does all the math. |
+| Prompt text in [`prompts/app/`](prompts/app/extract-statement.md) | Anyone can read *exactly* what Claude is told, and why each rule is there, and improve it without touching code. `finance/prompts.py` takes only the text between the `prompt:start` / `prompt:end` markers. |
 | `stop_reason` checks | `max_tokens` means "cut off, so retry smaller", `refusal` means "declined, so fail clearly" |
 
 ---
@@ -722,36 +723,14 @@ from typing import Callable, Literal
 import anthropic
 from pydantic import BaseModel, Field
 
-from finance import costs, ledger
+from finance import costs, ledger, prompts
 from finance.config import Category, Settings
 from finance.ids import merchant_key
 
 client = anthropic.Anthropic()
 
-CATEGORIZE_PROMPT = """You sort personal bank transactions into exactly one category each.
-
-Categories:
-- Grocery: food and household supplies bought to take home (supermarkets, grocery
-  delivery, markets).
-- Travel: getting around and trips (cabs, ride-hailing, fuel, parking, tolls, trains,
-  metro, flights, hotels).
-- Subscriptions: recurring charges for a service (streaming, music, cloud storage,
-  software, gym, phone and internet plans).
-- Investments: money put into assets (brokerage, mutual funds, SIPs, ETFs, stocks,
-  crypto, retirement contributions).
-- Savings: money moved to the user's own savings account, fixed deposit or recurring deposit.
-- Other: any other real spending (rent, restaurants, cafés, food delivery, shopping, bills,
-  insurance, loan payments, healthcare, cash withdrawals, money sent to other people).
-- Not an expense: money coming in (salary, interest, transfers in) and payments of the
-  user's own credit card bill.
-
-Rules:
-- Amount is positive for money out and negative for money in.
-- A refund (money in from a shop) keeps that shop's category.
-- Money coming back from the user's own savings or investments keeps that category.
-- merchant: a short, clean shop name, e.g. 'AMZN Mktp US*2K4L9' -> 'Amazon'.
-- If the description is too vague to tell, choose 'Other' with low confidence.
-  Do not guess."""
+# The words Claude follows live in prompts/app/categorize-transactions.md (between the markers).
+CATEGORIZE_PROMPT = prompts.load("categorize-transactions")
 
 
 class Labeled(BaseModel):
@@ -1483,7 +1462,7 @@ Catch errors from **most specific to least specific** (`RateLimitError` before `
 ### Run them
 
 ```bash
-python -m pytest                 # 206 tests, about 10 seconds, free (no real APIs)
+python -m pytest                 # 210 tests, about 10 seconds, free (no real APIs)
 python -m pytest --report TESTING.md   # …and refresh the results in TESTING.md
 python -m pytest -m live         # opt-in: the fixtures through the real Claude (~$0.50)
 python scripts/demo.py           # build a no-key demo, then:

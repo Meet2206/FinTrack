@@ -1,6 +1,6 @@
 # 🗄️ Database (DB)
 
-[Readme](Readme.md) · [Plan](Plan.md) · [Architecture](Architecture.md) · [Backend](Backend.md) · **DB** · [Testing](TESTING.md) · [Reason](Reason.md)
+[Readme](Readme.md) · [Plan](Plan.md) · [Architecture](Architecture.md) · [Backend](Backend.md) · **DB** · [Testing](TESTING.md) · [Reason](Reason.md) · [Prompts](prompts/README.md)
 
 | | |
 |---|---|

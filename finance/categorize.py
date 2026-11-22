@@ -17,35 +17,13 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from finance import costs, ledger
+from finance import costs, ledger, prompts
 from finance.config import Category, Settings
 from finance.extract import claude_parse
 from finance.ids import merchant_key, pretty_merchant
 
-CATEGORIZE_PROMPT = """You sort personal bank transactions into exactly one category each.
-
-Categories:
-- Grocery: food and household supplies bought to take home (supermarkets, grocery
-  delivery, markets).
-- Travel: getting around and trips (cabs, ride-hailing, fuel, parking, tolls, trains,
-  metro, flights, hotels).
-- Subscriptions: recurring charges for a service (streaming, music, cloud storage,
-  software, gym, phone and internet plans).
-- Investments: money put into assets (brokerage, mutual funds, SIPs, ETFs, stocks,
-  crypto, retirement contributions).
-- Savings: money moved to the user's own savings account, fixed deposit or recurring deposit.
-- Other: any other real spending (rent, restaurants, cafés, food delivery, shopping, bills,
-  insurance, loan payments, healthcare, cash withdrawals, money sent to other people).
-- Not an expense: money coming in (salary, interest, transfers in) and payments of the
-  user's own credit card bill.
-
-Rules:
-- Amount is positive for money out and negative for money in.
-- A refund (money in from a shop) keeps that shop's category.
-- Money coming back from the user's own savings or investments keeps that category.
-- merchant: a short, clean shop name, e.g. 'AMZN Mktp US*2K4L9' -> 'Amazon'.
-- If the description is too vague to tell, choose 'Other' with low confidence.
-  Do not guess."""
+# The instructions Claude follows: edit them in prompts/app/categorize-transactions.md
+CATEGORIZE_PROMPT = prompts.load("categorize-transactions")
 
 
 class Labeled(BaseModel):

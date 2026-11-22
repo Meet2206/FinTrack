@@ -1,6 +1,6 @@
 # 🧪 Testing: how we know it works
 
-[Readme](Readme.md) · [Plan](Plan.md) · [Architecture](Architecture.md) · [Backend](Backend.md) · [DB](DB.md) · **Testing** · [Reason](Reason.md)
+[Readme](Readme.md) · [Plan](Plan.md) · [Architecture](Architecture.md) · [Backend](Backend.md) · [DB](DB.md) · **Testing** · [Reason](Reason.md) · [Prompts](prompts/README.md)
 
 | | |
 |---|---|
@@ -16,7 +16,7 @@
 
 | Number | What it means |
 |---|---|
-| **206** automated tests | Run with one command, free, no internet needed |
+| **210** automated tests | Run with one command, free, no internet needed |
 | **34** statement scenarios | Real-life situations: normal months, locked PDFs, credit cards, AI mistakes, broken files, AI outages… |
 | **18** fixture files | Fake statement PDFs in [`tests/fixtures/`](tests/fixtures/) that you can open or upload yourself |
 | **19** live tests | The same fixture files sent to the **real** Claude (optional, costs about $0.50) |
@@ -31,7 +31,7 @@
 cd ~/Documents/meet-project
 source .venv/bin/activate
 
-python -m pytest                          # all 206 automated tests (~10 seconds, free)
+python -m pytest                          # all 210 automated tests (~10 seconds, free)
 python -m pytest --report TESTING.md      # same, and refresh the results at the bottom of this file
 python -m pytest tests/test_scenarios.py  # just the statement scenarios
 python -m pytest -k credit                # just tests with "credit" in their name
@@ -45,7 +45,7 @@ What you'll see:
 ........................................................................ [ 35%]
 ........................................................................ [ 70%]
 ..............................................................           [100%]
-206 passed, 19 deselected in 8.09s
+210 passed, 19 deselected in 8.09s
 ```
 
 Each dot is one passed test. An `F` would mean a failure, followed by an explanation of what went wrong. "19 deselected" are the live tests, which only run when you ask for them.
@@ -94,7 +94,7 @@ All three live in [`tests/scenarios.py`](tests/scenarios.py) (the actor in [`fin
 | Area | File | Tests | What it covers |
 |---|---|---|---|
 | 📄 Statement scenarios | [`test_scenarios.py`](tests/test_scenarios.py) | 40 | 34 single-statement situations ([§6](#6-the-34-statement-scenarios)) + 6 multi-upload situations (duplicates, overlaps, renamed copies, two accounts, card bill not double-counted, retry after failure) |
-| 🧮 Building blocks | [`test_core.py`](tests/test_core.py) | 26 | Math check edge cases, fingerprints, keyword matching, settings, PDF locking, page splitting, cut-off answers, missing API key |
+| 🧮 Building blocks | [`test_core.py`](tests/test_core.py) | 30 | Math check edge cases, fingerprints, keyword matching, settings, PDF locking, page splitting, cut-off answers, missing API key, the prompt files in `prompts/app/` (load exactly, every category described, broken or missing files explained) |
 | 🔁 End-to-end flows | [`test_pipeline.py`](tests/test_pipeline.py) | 23 | PDF → database → sheets, review, rules learning, sync idempotence, forgetting, backups, inbox |
 | 🗂️ Categorization | [`test_categorization.py`](tests/test_categorization.py) | 14 | Rules before AI, learning, your fixes win, configurable review threshold, batching by 100, what's sent to Claude, safe retries |
 | 📊 Google Sheets + DB upgrades | [`test_sheets_mirror.py`](tests/test_sheets_mirror.py) | 18 | Tabs, headers, Summary formulas = ledger totals, tab order, moving rows between sheets and months, deleting empty tabs, 1,200-row months, unshared sheets, upgrading an old database |
@@ -235,7 +235,7 @@ python -m pytest -m live      # skipped automatically if ANTHROPIC_API_KEY isn't
 
 <!-- TEST-RESULTS:START -->
 
-**Last run:** 2026-11-22 13:52 · **206 passed** · 0 failed · 0 skipped · 5.9 s of test time · Python 3.13.13
+**Last run:** 2026-11-22 18:55 · **210 passed** · 0 failed · 0 skipped · 6.2 s of test time · Python 3.13.13
 
 <details><summary><b>📄 Statement scenarios: reading and checking real-life statements</b>: 40/40 passed</summary>
 
@@ -284,7 +284,7 @@ python -m pytest -m live      # skipped automatically if ANTHROPIC_API_KEY isn't
 
 </details>
 
-<details><summary><b>🧮 Building blocks: math check, fingerprints, settings, PDFs</b>: 26/26 passed</summary>
+<details><summary><b>🧮 Building blocks: math check, fingerprints, settings, PDFs</b>: 30/30 passed</summary>
 
 | # | What is checked | Result |
 |---|---|---|
@@ -314,6 +314,10 @@ python -m pytest -m live      # skipped automatically if ANTHROPIC_API_KEY isn't
 | 24 | Refusal raises ai declined | ✅ |
 | 25 | Long page groups are split in half and retried | ✅ |
 | 26 | Missing api key gives a clear message | ✅ |
+| 27 | The ai instructions are read from the prompts folder | ✅ |
+| 28 | Every category is explained in the sorting instructions | ✅ |
+| 29 | A prompt file with broken markers is explained | ✅ |
+| 30 | A missing prompt file says how to restore it | ✅ |
 
 </details>
 

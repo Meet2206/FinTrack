@@ -1,4 +1,4 @@
-"""Unit tests: math check, fingerprints, keyword rules, settings, PDF tools, extraction helpers."""
+"""Unit tests: math check, fingerprints, keyword rules, settings, PDF tools, extraction helpers, prompt files."""
 
 from __future__ import annotations
 
@@ -6,9 +6,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from finance import extract, pdf_tools
+from finance import categorize, extract, pdf_tools, prompts
 from finance.categorize import keyword_category
-from finance.config import ConfigError, load_settings
+from finance.config import CATEGORIES, ConfigError, load_settings
 from finance.demo import build_statement, write_pdf
 from finance.extract import StatementChunk, Txn
 from finance.ids import merchant_key, transaction_ids
@@ -243,3 +243,40 @@ def test_missing_api_key_gives_a_clear_message(monkeypatch, settings, db, tmp_pa
     path = write_pdf(build_statement("2026-11"), tmp_path / "s.pdf", "X-1")
     result = pipeline.process_statement(path, settings, db)
     assert result.status == "failed" and "No Claude API key" in result.message
+
+
+# ── The AI's instructions (prompts/app/*.md) ─────────────────────────────────
+
+
+def test_the_ai_instructions_are_read_from_the_prompts_folder():
+    assert extract.EXTRACT_PROMPT == prompts.load("extract-statement")
+    assert categorize.CATEGORIZE_PROMPT == prompts.load("categorize-transactions")
+    for text in (extract.EXTRACT_PROMPT, categorize.CATEGORIZE_PROMPT):
+        assert "```" not in text and "<!--" not in text  # only the prompt, none of the notes around it
+    assert extract.EXTRACT_PROMPT.startswith("You read bank and credit card statement pages")
+    assert "Never calculate, round or guess a number." in extract.EXTRACT_PROMPT
+    assert "only the last 4 digits" in extract.EXTRACT_PROMPT
+
+
+def test_every_category_is_explained_in_the_sorting_instructions():
+    for category in CATEGORIES:
+        assert f"\n- {category}: " in categorize.CATEGORIZE_PROMPT, category
+
+
+def test_a_prompt_file_with_broken_markers_is_explained():
+    block = "<!-- prompt:start -->\n```text\nHello Claude.\n```\n<!-- prompt:end -->"
+    notes = "Edit only between `<!-- prompt:start -->` and `<!-- prompt:end -->`."
+    assert prompts.parse(f"# Notes\n\n{notes}\n\n{block}\n\nMore notes.") == "Hello Claude."
+    assert prompts.parse("<!-- prompt:start -->\nNo fence.\n<!-- prompt:end -->") == "No fence."
+    for broken, reason in [
+        ("Just notes, no markers.", "no prompt blocks"),
+        (f"{block}\n{block}", "2 prompt blocks"),
+        ("<!-- prompt:start -->\n```text\n\n```\n<!-- prompt:end -->", "empty"),
+    ]:
+        with pytest.raises(prompts.PromptFileError, match=reason):
+            prompts.parse(broken)
+
+
+def test_a_missing_prompt_file_says_how_to_restore_it(tmp_path):
+    with pytest.raises(prompts.PromptFileError, match="git checkout -- prompts/app/missing.md"):
+        prompts.load("missing", folder=tmp_path)

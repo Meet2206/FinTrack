@@ -1,6 +1,6 @@
 # 🤔 Reason: why this, and not that
 
-[Readme](Readme.md) · [Plan](Plan.md) · [Architecture](Architecture.md) · [Backend](Backend.md) · [DB](DB.md) · [Testing](TESTING.md) · **Reason**
+[Readme](Readme.md) · [Plan](Plan.md) · [Architecture](Architecture.md) · [Backend](Backend.md) · [DB](DB.md) · [Testing](TESTING.md) · **Reason** · [Prompts](prompts/README.md)
 
 | | |
 |---|---|
@@ -212,6 +212,24 @@ Every decision uses this card:
 | **Why** | A personal app processes a few statements a month. A queue adds servers, configuration and failure modes for no benefit. Statuses in the database already give us "where is it up to?" and safe retries. |
 | **Trade-off** | You wait 1–2 minutes while a statement is read (with a progress spinner). |
 | **Revisit when** | Many users or many statements at once. |
+
+### 2.6 The AI's instructions live in Markdown files, not in the code
+| | |
+|---|---|
+| **Chose** | Each prompt is a document in [`prompts/app/`](prompts/README.md): notes for people around the outside, and the exact text Claude receives between `prompt:start` / `prompt:end` markers. `finance/prompts.py` reads only what's between the markers. |
+| **Over** | Prompt text written inside the Python files · a prompt-management service · a database table of prompts |
+| **Why** | The prompt is the part of an AI app most worth reading and most often improved, so it shouldn't be hidden in code. Next to each rule sits the reason for it and what goes wrong without it, so nobody "simplifies" away a rule that was there for a reason. It's one copy, so the docs can't drift from what's actually sent. Plain files keep their history in git like everything else, and no service is needed for one person. |
+| **Trade-off** | A deleted or mangled file stops the app from starting. The error names the file and the `git checkout` command that restores it, and tests check that both prompts load, contain their key rules and describe every category. Prompts are read once at startup, so the web app needs a restart after an edit. |
+| **Revisit when** | You want to A/B test prompt versions side by side. Then give each version a name and log which one each AI call used. |
+
+### 2.7 One handoff file for continuing anywhere
+| | |
+|---|---|
+| **Chose** | [`prompts/PROJECT_CONTEXT.md`](prompts/PROJECT_CONTEXT.md) holds everything an AI assistant needs to continue the project: where it's up to, how it works, the rules, the commands, the gotchas, what's next. `CLAUDE.md` imports it, so Claude Code loads it automatically, and you paste the same file into any other AI tool. |
+| **Over** | Relying on the AI's chat history or memory · writing the context into `CLAUDE.md` itself · "just read all the docs" |
+| **Why** | Chat history and AI memory stay on the laptop they were made on, so they don't come with you to a new computer. All the docs together are thousands of lines, and a fresh session needs the short version plus pointers. One file works in every tool, with no copy to fall out of date. |
+| **Trade-off** | It has to be kept current. It tells the AI to update it whenever the project changes, and it says "trust the code" when the two disagree. |
+| **Revisit when** | Several people work on the project. Then a proper CONTRIBUTING guide and issue tracker take over this job. |
 
 ---
 

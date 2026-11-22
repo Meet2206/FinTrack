@@ -1,6 +1,6 @@
 # 🏗️ Architecture
 
-[Readme](Readme.md) · [Plan](Plan.md) · **Architecture** · [Backend](Backend.md) · [DB](DB.md) · [Testing](TESTING.md) · [Reason](Reason.md)
+[Readme](Readme.md) · [Plan](Plan.md) · **Architecture** · [Backend](Backend.md) · [DB](DB.md) · [Testing](TESTING.md) · [Reason](Reason.md) · [Prompts](prompts/README.md)
 
 | | |
 |---|---|
@@ -91,10 +91,10 @@
 | **Command line** | The same features, typed in a terminal | Typer | `cli.py` | [Backend §8](Backend.md#8-the-command-line-clipy) |
 | **Pipeline** | The manager: runs each step in order and handles problems | Python | `finance/pipeline.py` | [Backend §7.12](Backend.md#712-pipelinepy-the-manager) |
 | **PDF tools** | Opens the PDF, unlocks it, splits it into small page groups | `pypdf` | `finance/pdf_tools.py` | [Backend §7.2](Backend.md#72-pdf_toolspy-open-unlock-split) |
-| **Extractor** | Sends page groups to Claude and gets back a filled-in form | Anthropic SDK, Pydantic | `finance/extract.py` | [Backend §7.3](Backend.md#73-extractpy-claude-reads-the-pages) |
+| **Extractor** | Sends page groups to Claude and gets back a filled-in form | Anthropic SDK, Pydantic | `finance/extract.py` + [`prompts/app/extract-statement.md`](prompts/app/extract-statement.md) | [Backend §7.3](Backend.md#73-extractpy-claude-reads-the-pages) |
 | **Reconciler** | Checks the math row by row | Python | `finance/reconcile.py` | [Backend §7.4](Backend.md#74-reconcilepy-check-the-math) |
 | **IDs** | Makes fingerprints for transactions and shop names | `hashlib`, `re` | `finance/ids.py` | [Backend §7.5](Backend.md#75-idspy-fingerprints) |
-| **Categorizer** | Saved rules first, then Claude for unknown shops | Anthropic SDK | `finance/categorize.py` | [Backend §7.6](Backend.md#76-categorizepy-sort-into-categories) |
+| **Categorizer** | Saved rules first, then Claude for unknown shops | Anthropic SDK | `finance/categorize.py` + [`prompts/app/categorize-transactions.md`](prompts/app/categorize-transactions.md) | [Backend §7.6](Backend.md#76-categorizepy-sort-into-categories) |
 | **Ledger** | Reads and writes the master database | `sqlite3` | `finance/ledger.py` | [DB](DB.md) |
 | **Sheets mirror** | Copies the ledger into the 5 Google Sheets | `gspread` | `finance/sheets.py` | [Backend §7.8](Backend.md#78-sheetspy-the-google-sheets-mirror) |
 | **Alerts** | Looks for double charges, price increases and so on | `pandas` | `finance/alerts.py` | [Backend §7.10](Backend.md#710-alertspy-spot-weird-charges) |
