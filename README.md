@@ -11,6 +11,10 @@ your Google Sheet.
 >
 > **Plot twist:** the Dashboard has receipts.
 
+<p align="center">
+  <img src="https://api.memegen.link/images/fine/Bank_balance_after_one_weekend/This_is_fine.gif" width="460" alt="MEME: bank balance after one weekend — this is fine">
+</p>
+
 ## What it does
 
 - Reads supported text-based bank and card statement PDFs locally
@@ -56,6 +60,10 @@ cap, and income with no visible Savings or Investments transfer. Suggestions
 show the evidence and a modest estimate; they are not financial advice.
 
 > **MEME:** “It was only ₹300.” — said twelve times in one month.
+
+<p align="center">
+  <img src="https://media.giphy.com/media/12XMGIWtrHBl5e/giphy-downsized.gif" width="320" alt="MEME: discovering the monthly spending total">
+</p>
 
 ## Google Sheets layout
 

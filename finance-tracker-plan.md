@@ -21,6 +21,10 @@ month while keeping financial decisions with the human who owns the account.
 >
 > **Narrator:** They did not.
 
+<p align="center">
+  <img src="https://media.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.gif" width="160" alt="MEME: waiting for the statement to process">
+</p>
+
 ## Completed
 
 - Local extraction for the supplied text-based Indian-style statements
@@ -105,3 +109,7 @@ user chooses whether it makes sense.
   appears twelve times.
 - **MEME:** “I will remember what this charge was.” That is why Review exists.
 - **MEME:** “The balance looks right-ish.” Reconciliation requires exact cents.
+
+<p align="center">
+  <img src="https://api.memegen.link/images/panik-kalm-panik/47_transactions_I_don't_remember/The_app_sorted_them_all/They're_all_food_delivery.png" width="360" alt="MEME: the app sorted all the transactions">
+</p>
