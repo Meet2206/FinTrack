@@ -1,6 +1,6 @@
 # 🧠 Prompts
 
-[Readme](../Readme.md) · [Plan](../Plan.md) · [Architecture](../Architecture.md) · [Backend](../Backend.md) · [DB](../DB.md) · [Testing](../TESTING.md) · [Reason](../Reason.md) · **Prompts**
+[README](../README.md) · [Automation](../AUTOMATION.md) · [Architecture](../Architecture.md) · [Backend](../Backend.md) · [DB](../DB.md) · [Testing](../TESTING.md) · **Prompts**
 
 | File | What it's for |
 |---|---|
