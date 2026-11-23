@@ -7,7 +7,7 @@ requires-python = ">=3.12"
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
-markers = ["live: calls the real Claude API (costs a few cents)"]
+markers = ["live: calls the optional external provider (may incur cost)"]
 addopts = "-m 'not live'"
 filterwarnings = ["ignore::DeprecationWarning"]
 

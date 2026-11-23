@@ -1,6 +1,6 @@
 """What did the AI cost?
 
-In plain English: every Claude response says how many tokens it read and wrote.
+In plain English: optional provider responses can report usage and cost.
 We multiply by the prices in config.yaml and log it, so you always know the spend.
 """
 

@@ -1,13 +1,13 @@
 """Load the AI's instructions from the Markdown files in prompts/app/.
 
-In plain English: the words we send to Claude live in normal documents you can
+In plain English: provider instructions live in normal documents you can
 read and edit (prompts/app/*.md), not buried in Python code. Each file explains
-the prompt for humans, and the exact text Claude receives sits between two
+the prompt for humans, and the exact text the provider receives sits between two
 markers:
 
     <!-- prompt:start -->
     ```text
-    ...the words Claude reads...
+    ...the words the provider reads...
     ```
     <!-- prompt:end -->
 
@@ -53,7 +53,7 @@ def parse(text: str, source: str = "prompt file") -> str:
 
 @cache
 def load(name: str, folder: Path = PROMPTS_DIR) -> str:
-    """Read prompts/app/<name>.md and return the exact text Claude receives."""
+    """Read prompts/app/<name>.md and return the exact text the provider receives."""
     path = folder / f"{name}.md"
     try:
         text = path.read_text(encoding="utf-8")

@@ -42,7 +42,7 @@ def test_mistakes_in_settings_are_explained(tmp_path, text, message):
 def test_empty_settings_file_uses_safe_defaults(tmp_path):
     s = load_settings(write_config(tmp_path, ""))
     assert (
-        s.sheets == {} and s.model == "claude-opus-5-5" and s.review.review_if_confidence == ["low", "medium"]
+        s.sheets == {} and s.model == "external-provider" and s.review.review_if_confidence == ["low", "medium"]
     )
 
 
@@ -258,7 +258,7 @@ def test_watcher_waits_until_a_file_stops_growing(tmp_path, monkeypatch):
 def test_checklist_when_nothing_is_set_up(tmp_path, monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     checks = {c.label: c for c in run_checks(write_config(tmp_path, ""), online=False)}
-    assert not checks["Claude API key"].ok and "ANTHROPIC_API_KEY" in checks["Claude API key"].fix
+    assert not checks["External AI key"].ok and "ANTHROPIC_API_KEY" in checks["External AI key"].fix
     assert not checks["Google Sheets"].ok
     assert not checks[".gitignore protects your secrets and data"].ok
 

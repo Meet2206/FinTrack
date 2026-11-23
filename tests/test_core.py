@@ -242,7 +242,7 @@ def test_missing_api_key_gives_a_clear_message(monkeypatch, settings, db, tmp_pa
     )
     path = write_pdf(build_statement("2026-11"), tmp_path / "s.pdf", "X-1")
     result = pipeline.process_statement(path, settings, db)
-    assert result.status == "failed" and "No Claude API key" in result.message
+    assert result.status == "failed" and "No external AI key" in result.message
 
 
 # ── The AI's instructions (prompts/app/*.md) ─────────────────────────────────

@@ -25,7 +25,7 @@ AREAS = {
     "test_cli": "⌨️ Command line",
     "test_settings_and_automation": "⚙️ Settings, monthly summary, Telegram, automation, setup checklist",
     "test_app": "🖥️ Web app pages",
-    "test_live": "🌐 Live: the real Claude (opt-in)",
+    "test_live": "🌐 Live: optional external-provider integration",
 }
 _results: list[dict] = []
 

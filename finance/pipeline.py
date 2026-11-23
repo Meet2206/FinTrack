@@ -1,6 +1,6 @@
 """The manager: runs every step for one statement, in order.
 
-In plain English: fingerprint → unlock → read (Claude) → check the math → save →
+In plain English: fingerprint → unlock → read → check the math → save →
 categorize → alerts. If anything fails, it records a plain-English reason on the
 statement and stops safely. Nothing half-finished ever reaches Google Sheets.
 Re-running is always safe: rows already saved are skipped.
@@ -129,19 +129,19 @@ def process_statement(path: Path, settings: Settings, db, password: str | None =
         return _fail(
             db,
             sid,
-            "No Claude API key found. Add ANTHROPIC_API_KEY=sk-ant-… to the .env file "
+            "No external AI key found. Use offline_mode: true or configure ANTHROPIC_API_KEY in .env "
             "(copy .env.example to .env first), then try again.",
         )
     except anthropic.AuthenticationError:
-        return _fail(db, sid, "Claude API key is missing or wrong. Check ANTHROPIC_API_KEY in .env.")
+        return _fail(db, sid, "External AI credentials are missing or invalid. Check offline_mode or .env.")
     except anthropic.RateLimitError:
-        return _fail(db, sid, "Claude is busy right now. Try again in a minute.")
+        return _fail(db, sid, "The external AI provider is busy. Try again in a minute.")
     except anthropic.APIConnectionError:
-        return _fail(db, sid, "Couldn't reach Claude. Check your internet connection.")
+        return _fail(db, sid, "Couldn't reach the external AI provider. Check your internet connection.")
     except anthropic.APIStatusError as e:
-        return _fail(db, sid, f"Claude API error ({e.status_code}). Try again later.")
+        return _fail(db, sid, f"External AI provider error ({e.status_code}). Try again later.")
     except anthropic.AnthropicError as e:
-        return _fail(db, sid, f"Couldn't use Claude: {e}. Is ANTHROPIC_API_KEY set in .env?")
+        return _fail(db, sid, f"Couldn't use the external AI provider: {e}. Check offline_mode or .env.")
     except Exception as e:
         log.exception("statement %s failed unexpectedly", sid)
         return _fail(

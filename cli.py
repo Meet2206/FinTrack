@@ -79,11 +79,11 @@ def process(
             raise typer.Exit(1) from None
         except extract.MissingAPIKey:
             console.print(
-                "[red]No Claude API key found. Add ANTHROPIC_API_KEY to .env (see .env.example).[/red]"
+                "[red]No external AI key found. Use offline_mode: true or configure ANTHROPIC_API_KEY in .env.[/red]"
             )
             raise typer.Exit(1) from None
         except anthropic.APIError as e:
-            console.print(f"[red]Claude API problem: {e}[/red]")
+            console.print(f"[red]External AI provider problem: {e}[/red]")
             raise typer.Exit(1) from None
         _table(
             f"{stmt.bank_name or 'Statement'} ••{stmt.account_last4} · {stmt.period_start} → {stmt.period_end}"

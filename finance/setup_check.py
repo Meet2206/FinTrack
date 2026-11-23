@@ -1,6 +1,6 @@
 """Is everything set up? Used by `python cli.py check` and the Setup page.
 
-In plain English: a checklist that tests your settings file, Claude key, Google
+In plain English: a checklist that tests your settings file, optional external AI key, Google
 robot account, spreadsheets, folders and .gitignore, and says how to fix each problem.
 """
 
@@ -50,25 +50,25 @@ def run_checks(path: str | Path | None = None, online: bool = True) -> list[Chec
         if online:
             try:
                 anthropic.Anthropic().models.list(limit=1)  # free: just lists models
-                checks.append(Check(True, "Claude API key works"))
+                checks.append(Check(True, "External AI key works"))
             except anthropic.AuthenticationError:
                 checks.append(
                     Check(
                         False,
-                        "Claude API key",
-                        "The key in .env was rejected. Create a new one at platform.claude.com → API Keys.",
+                        "External AI key",
+                        "The key in .env was rejected. Remove it for offline mode or replace it with a valid key.",
                     )
                 )
             except anthropic.APIError as e:
-                checks.append(Check(False, "Claude API", f"Couldn't reach Claude: {e}"))
+                checks.append(Check(False, "External AI provider", f"Couldn't reach provider: {e}"))
         else:
-            checks.append(Check(True, "Claude API key is set (not tested offline)"))
+            checks.append(Check(True, "External AI key is set (not tested offline)"))
     else:
         checks.append(
             Check(
                 False,
-                "Claude API key",
-                "Add ANTHROPIC_API_KEY=sk-ant-… to .env (copy .env.example to .env first).",
+                "External AI key",
+                "Set offline_mode: true, or add ANTHROPIC_API_KEY to .env.",
             )
         )
 

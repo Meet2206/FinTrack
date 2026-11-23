@@ -206,7 +206,7 @@ def test_summary_send_without_telegram_set_up(env, monkeypatch):
 def test_check_offline_lists_what_is_missing(env):
     result = run("check", "--offline")
     assert result.exit_code == 1
-    assert "Claude API key" in result.output and "Google Sheets" in result.output
+    assert "External AI key" in result.output and "Google Sheets" in result.output
     assert "Data folders are writable" in result.output
 
 
