@@ -76,6 +76,18 @@ def categorize_statement(
                 )
             )
             tally["keyword"] += 1
+        elif getattr(settings, "offline_mode", False):
+            category = local_category(r["description"], settings.keywords)
+            updates.append(
+                dict(
+                    id=r["id"],
+                    merchant=pretty_merchant(r["description"]),
+                    category=category,
+                    confidence="medium" if category == "Other" else "high",
+                    source="keyword",
+                )
+            )
+            tally["keyword"] += 1
         else:
             for_ai.append(r)  # 3. ask Claude
 
@@ -114,6 +126,25 @@ def categorize_statement(
     if used_rules:
         ledger.bump_rules(db, used_rules)
     return tally
+
+
+def local_category(description: str, keywords: dict[str, list[str]]) -> str:
+    """Conservative, explainable categorization for offline use."""
+    direct = keyword_category(description, keywords)
+    if direct:
+        return direct
+    text = description.lower()
+    if re.search(r"salary|payroll|interest|cash deposit|credit|refund|transfer from", text):
+        return "Not an expense"
+    if re.search(r"uber|ola|irctc|rail|metro|air|flight|hotel|fuel|parking|toll|atm", text):
+        return "Travel"
+    if re.search(r"grocery|bigbasket|dmart|mart|supermarket|fresh greens", text):
+        return "Grocery"
+    if re.search(r"sip|mutual fund|broker|etf|stock", text):
+        return "Investments"
+    if re.search(r"savings|fixed deposit|recurring deposit", text):
+        return "Savings"
+    return "Other"
 
 
 def ask_claude(

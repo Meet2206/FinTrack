@@ -1,6 +1,6 @@
 # Where Did My Money Go? settings
 # Copy this file to config.yaml and fill it in:  cp config.example.yaml config.yaml
-# Settings only. Secrets (API keys) go in .env, PDF passwords in the Keychain.
+# Settings only. PDF passwords are stored in the Keychain.
 
 # ─── Google Sheets ───────────────────────────────────────────────────────
 # Spreadsheet IDs: the long code in each sheet's URL between /d/ and /edit
@@ -14,18 +14,20 @@ sheets:
   # Other: ""                     # remove the # to turn on the optional 6th sheet
 
 service_account_file: service_account.json
+# OAuth client ID for optional Google Drive/Sheets sign-in. A client ID alone
+# does not grant access; Google sign-in or a service-account JSON is still required.
+google_client_id: ""
+# Optional single-workbook mode. Paste the ID from the FinTrack Google Sheet URL.
+fintrack_spreadsheet_id: ""
 
 # ─── Money ───────────────────────────────────────────────────────────────
 currency: USD                     # your statements' currency (USD, EUR, INR, GBP…)
 
-# ─── AI ──────────────────────────────────────────────────────────────────
-model: claude-opus-5-5
-pages_per_chunk: 3                # pages sent to Claude per request
-categorize_batch_size: 100        # transactions per categorization request
-pricing_per_million_tokens:       # only used for the cost log; check current prices
-  claude-opus-5-5: { input: 4.00, output: 20.00 }
+# ─── Local processing ────────────────────────────────────────────────────
+# Text-based statements are processed without an external AI service or API.
+offline_mode: true
 
-# ─── Keyword rules: checked BEFORE asking the AI ─────────────────────────
+# ─── Keyword rules: checked locally ─────────────────────────────────────
 # Whole words, any capitalization. Checked top to bottom; first match wins.
 keywords:
   Subscriptions: [netflix, spotify, icloud, adobe, gym]
@@ -37,7 +39,7 @@ keywords:
 
 # ─── Review ──────────────────────────────────────────────────────────────
 review:
-  review_if_confidence: [low, medium]   # AI answers at these levels wait for you
+  review_if_confidence: [low, medium]   # uncertain local matches wait for you
   large_charge: 200                      # first-ever charge from a shop above this → alert
 
 # ─── Automation ──────────────────────────────────────────────────────────

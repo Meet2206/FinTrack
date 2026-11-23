@@ -8,8 +8,10 @@ answer, we cut it in half and try again.
 
 from __future__ import annotations
 
+import re
 import time
 from collections.abc import Callable
+from datetime import datetime
 from typing import Literal
 
 import anthropic
@@ -119,10 +121,169 @@ def extract_pages(pdf_b64: str, model: str, on_call: Callable[[costs.AICall], No
 
 def extract_statement(reader, settings, on_call: Callable[[costs.AICall], None]) -> StatementChunk:
     """Read every page group and join the results into one statement."""
+    if getattr(settings, "offline_mode", False):
+        return extract_statement_local(reader)
     chunks: list[StatementChunk] = []
     for pages in page_groups(reader, settings.pages_per_chunk):
         chunks += _extract_with_retry(reader, pages, settings.model, on_call)
     return merge(chunks)
+
+
+_DATE_RE = re.compile(
+    r"^(\d{1,2}[/-]\d{1,2}(?:[/-]\d{4})?|\d{4}-\d{1,2}-\d{1,2}|\d{1,2}-[A-Za-z]{3}-\d{2,4})\b"
+)
+_MONEY_RE = re.compile(r"(?:[$₹€£]\s*)?-?\d[\d,]*(?:\.\d{2})")
+
+
+def _date(value: str, default_year: int | None = None, month_first: bool = False) -> str | None:
+    if default_year and re.fullmatch(r"\d{1,2}[/-]\d{1,2}", value):
+        first, second = re.split(r"[/-]", value)
+        value = f"{first}/{second}/{default_year}"
+        fmt = "%m/%d/%Y" if month_first else "%d/%m/%Y"
+        try:
+            return datetime.strptime(value, fmt).date().isoformat()
+        except ValueError:
+            return None
+    for fmt in ("%d-%m-%Y", "%d/%m/%Y", "%m/%d/%Y", "%Y-%m-%d", "%d-%b-%y", "%d-%b-%Y"):
+        try:
+            return datetime.strptime(value, fmt).date().isoformat()
+        except ValueError:
+            pass
+    return None
+
+
+def _amount(value: str) -> float:
+    return abs(float(value.replace(",", "").replace("$", "").replace("₹", "").replace("€", "").replace("£", "")))
+
+
+def _period(text: str) -> tuple[str | None, str | None]:
+    def month_date(day: str, month: str, year: str) -> str:
+        for fmt in ("%d %B %Y", "%d %b %Y"):
+            try:
+                return datetime.strptime(f"{day} {month} {year}", fmt).date().isoformat()
+            except ValueError:
+                pass
+        raise ValueError
+
+    m = re.search(
+        r"(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})\s*[–-]\s*(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})",
+        text,
+    )
+    if m:
+        try:
+            return (
+                month_date(m[1], m[2], m[3]),
+                month_date(m[4], m[5], m[6]),
+            )
+        except ValueError:
+            pass
+    m = re.search(r"(\d{1,2})/(\d{1,2})/(\d{4})\s+to\s+(\d{1,2})/(\d{1,2})/(\d{4})", text, re.I)
+    if m:
+        return f"{m[3]}-{m[2]}-{m[1]}", f"{m[6]}-{m[5]}-{m[4]}"
+    m = re.search(
+        r"Statement period\s*:\s*(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})\s+to\s+"
+        r"(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})",
+        text,
+        re.I,
+    )
+    if m:
+        try:
+            return month_date(m[1], m[2], m[3]), month_date(m[4], m[5], m[6])
+        except ValueError:
+            pass
+    m = re.search(r"([A-Za-z]+)\s+(\d{1,2})\s*[–-]\s*([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})", text)
+    if m:
+        try:
+            return (
+                month_date(m[2], m[1], m[5]),
+                month_date(m[4], m[3], m[5]),
+            )
+        except ValueError:
+            pass
+    return None, None
+
+
+def extract_statement_local(reader) -> StatementChunk:
+    """Parse the text-based statement pack locally; never calls a network service."""
+    text = "\n".join(page.extract_text() or "" for page in reader.pages).replace("\x7f", "")
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    period_start, period_end = _period(text)
+    account = re.search(r"(?:account|card)(?: number)?[^\n]*?(\d{4})\b", text, re.I)
+    bank = next((line for line in lines[:12] if "bank" in line.lower()), lines[0] if lines else None)
+    currency = (re.search(r"\b(INR|USD|EUR|GBP)\b", text) or [None, None])[1]
+    opening_m = re.search(
+        r"Opening balance(?: \([^)]*\))?[^\d\n]*(?:\n[^\d\n]*)?([\d,]+\.\d{2})", text, re.I
+    )
+    closing_m = re.search(
+        r"Closing balance(?: \([^)]*\))?[^\d\n]*(?:\n[^\d\n]*)?([\d,]+\.\d{2})", text, re.I
+    )
+    opening = _amount(opening_m[1]) if opening_m else None
+    closing = _amount(closing_m[1]) if closing_m else None
+
+    header_index = next(
+        (i for i, line in enumerate(lines) if line.lower() == "date" or line.lower().startswith("date ")),
+        -1,
+    )
+    starts = [i for i, line in enumerate(lines) if i > header_index and _DATE_RE.match(line)]
+    transactions: list[Txn] = []
+    previous_balance = opening
+    for pos, start in enumerate(starts):
+        chunk = lines[start : starts[pos + 1] if pos + 1 < len(starts) else len(lines)]
+        match = _DATE_RE.match(chunk[0])
+        txn_date = (
+            _date(
+                match[1],
+                default_year=int(period_start[:4]) if period_start else None,
+                month_first="riverbend" in text.lower(),
+            )
+            if match
+            else None
+        )
+        if not txn_date or any(x.lower() in chunk[0].lower() for x in ("opening balance", "closing balance")):
+            continue
+        body = chunk[0][match.end() :].strip() + " " + " ".join(chunk[1:])
+        if re.search(r"\b(opening|closing) balance\b", body, re.I):
+            continue
+        numbers = _MONEY_RE.findall(body)
+        if len(numbers) < 2:
+            continue
+        balance = _amount(numbers[-1])
+        amount = _amount(numbers[-2])
+        description = body
+        for number in numbers[-2:]:
+            description = description.replace(number, " ", 1)
+        description = re.sub(r"\s+", " ", description).strip(" -")
+        description = re.split(
+            r"\b(?:This document|This statement|Synthetic customer|SPECIMEN\s*-|S Y N T H E T I C)\b",
+            description,
+            maxsplit=1,
+            flags=re.I,
+        )[0].strip(" -")
+        explicit_type = next((x.upper() for x in chunk[1:4] if x.upper() in {"DEBIT", "CREDIT"}), None)
+        if explicit_type == "DEBIT":
+            debit, credit = amount, None
+        elif explicit_type == "CREDIT":
+            debit, credit = None, amount
+        elif previous_balance is not None and balance >= previous_balance:
+            debit, credit = None, amount
+        else:
+            debit, credit = amount, None
+        transactions.append(Txn(date=txn_date, description=description, debit=debit, credit=credit, balance=balance))
+        previous_balance = balance
+
+    looks_like = bool(transactions) and bool(re.search(r"statement|balance|transaction", text, re.I))
+    return StatementChunk(
+        looks_like_statement=looks_like,
+        kind="card" if re.search(r"credit card statement|credit card account|card statement", text, re.I) else "bank",
+        bank_name=bank,
+        account_last4=account[1] if account else None,
+        currency=currency,
+        period_start=period_start,
+        period_end=period_end,
+        opening_balance=opening,
+        closing_balance=closing,
+        transactions=transactions,
+    )
 
 
 def _extract_with_retry(reader, pages: range, model: str, on_call) -> list[StatementChunk]:

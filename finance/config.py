@@ -53,8 +53,11 @@ class ReviewSettings(BaseModel):
 class Settings(BaseModel):
     sheets: dict[SheetCategory, str] = {}
     service_account_file: Path = Path("service_account.json")
+    google_client_id: str | None = None
+    fintrack_spreadsheet_id: str | None = None
     currency: str = "USD"
     model: str = "claude-opus-5-5"
+    offline_mode: bool = False  # Use the local PDF parser and rules; no AI/network required.
     pages_per_chunk: int = Field(3, ge=1, le=20)
     categorize_batch_size: int = Field(100, ge=1, le=300)
     pricing_per_million_tokens: dict[str, Price] = {}

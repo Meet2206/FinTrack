@@ -7,7 +7,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.12%2B-3776AB?logo=python&logoColor=white" alt="Python 3.12+">
-  <img src="https://img.shields.io/badge/AI-Claude%20Opus%205.5-D97757" alt="Claude Opus 5.5">
+  <img src="https://img.shields.io/badge/processing-local%20and%20offline-2ea44f" alt="Local and offline processing">
   <img src="https://img.shields.io/badge/UI-Streamlit-FF4B4B?logo=streamlit&logoColor=white" alt="Streamlit">
   <img src="https://img.shields.io/badge/data-stays%20on%20your%20laptop-2ea44f" alt="Data stays local">
   <img src="https://img.shields.io/badge/financial%20advice-absolutely%20not-lightgrey" alt="Not financial advice">
@@ -17,7 +17,7 @@
   <img src="https://api.memegen.link/images/fine/Bank_balance_after_one_weekend/This_is_fine.gif" width="460" alt="This is fine dog: 'Bank balance after one weekend'">
 </p>
 
-[Plan](Plan.md) · [Architecture](Architecture.md) · [Backend](Backend.md) · [DB](DB.md) · [Testing](TESTING.md) · [Reason](Reason.md) · [Prompts](prompts/README.md)
+[Automation](AUTOMATION.md) · [Architecture](Architecture.md) · [Backend](Backend.md) · [DB](DB.md) · [Testing](TESTING.md)
 
 ---
 
@@ -68,11 +68,12 @@ For people brave enough to press the left button. 🫡
 ## 🪄 How it works (30-second version)
 
 1. 📄 **You drop in a statement PDF.** Locked ones too: it remembers the password (securely, in your Mac's Keychain).
-2. 🤖 **Claude (the AI) reads every row,** even on scanned statements.
+2. 🔎 **The local parser reads every row** from text-based statements without an external AI service.
 3. 🧮 **The app checks the math.** Opening balance + money in − money out must equal what the bank printed, row by row. If one number is off, it tells you *exactly which row*.
-4. 🗂️ **Every row gets a category.** Shops it has seen before are sorted instantly by saved rules. New ones go to the AI.
-5. 👀 **You glance at the few rows it wasn't sure about.** Your fixes become rules, so it gets smarter every month.
-6. 📊 **Sync**: rows land in the right Google Sheet, in the right month tab, and the totals update themselves.
+4. 🗂️ **Every row gets a category** using saved merchant rules and local keyword matching.
+5. 💡 **The app suggests savings opportunities** from recurring charges, spending concentration, and missing set-asides.
+6. 👀 **You glance at the few rows it wasn't sure about.** Your fixes become rules for future statements.
+7. 📊 **Sync**: rows land in the right Google Sheet, in the right month tab, and the totals update themselves.
 
 <p align="center">
   <img src="https://api.memegen.link/images/gru/Upload_my_bank_statement/AI_sorts_every_expense/Find_out_cabs_cost_more_than_rent/Find_out_cabs_cost_more_than_rent.png" width="460" alt="Gru's plan: upload statement, AI sorts every expense, find out cabs cost more than rent">
@@ -148,11 +149,12 @@ Everything else (rent, restaurants, shopping…) goes to **Other**. It stays vis
 - ✅ **Learns from your corrections.** Fix a shop once and it's fixed forever.
 - ✅ **5 Google Sheets × monthly tabs**, plus a self-updating Summary tab
 - ✅ **Dashboard**: spending vs. set aside, savings rate, monthly chart, top shops
+- ✅ **Money suggestions**: explainable, conservative opportunities to reduce spending or increase set-asides
 - ✅ **Alerts**: double charges, weirdly big charges, new subscriptions, sneaky price increases, free trials that turned paid, category spikes
 - ✅ **Automation**: drop PDFs in a folder and they're processed on their own
 - ✅ **Monthly summary** to Telegram (optional)
-- ✅ **Cost log**: see exactly what the AI cost you (spoiler: very little)
-- ✅ **210 automated tests** across 34 real-life statement scenarios, including deliberate AI mistakes it must catch ([TESTING.md](TESTING.md))
+- ✅ **No paid AI required**: text-based statements are parsed and categorized locally
+- ✅ **212 automated tests** across statement scenarios, reconciliation, categorization, suggestions, sync, and UI ([TESTING.md](TESTING.md))
 - ✅ **Your data stays on your laptop.** Details in [Privacy](#-privacy).
 
 <p align="center">
@@ -177,22 +179,17 @@ cp config.example.yaml config.yaml
 cp .env.example .env
 ```
 
-**2. Add your Claude API key** to `.env` (get one at platform.claude.com, and set a monthly spend limit while you're there):
-```bash
-ANTHROPIC_API_KEY=sk-ant-…
-```
-
-**3. Set up Google Sheets** (the 5-minute version; the very detailed version is in [Backend → Setup](Backend.md#4-setup-step-by-step)):
+**2. Set up Google Sheets** (optional; the detailed explanation is in [AUTOMATION.md](AUTOMATION.md)):
 1. In Google Cloud, create a project, enable the **Google Sheets API**, create a **service account**, and download its JSON key as `service_account.json`.
 2. Create 5 spreadsheets (`Expenses – Grocery`, …). Rename each first tab to **`Summary`** and share each with the service account's email as **Editor**.
 3. Paste the 5 spreadsheet IDs (the long code in each URL) into `config.yaml`.
 
-**4. Check everything**
+**3. Check everything**
 ```bash
 python cli.py check
 ```
 
-**5. Go!**
+**4. Go!**
 ```bash
 streamlit run app.py --server.address localhost     # the app → http://localhost:8501
 # or, from the terminal:
@@ -206,13 +203,7 @@ python scripts/demo.py
 WDMMG_CONFIG=demo/config.yaml streamlit run app.py --server.address localhost
 ```
 
-**Have a Claude key but no statement handy?**
-```bash
-python scripts/make_fake_statement.py        # creates data/inbox/fake_statement.pdf (fake data)
-python cli.py process data/inbox/fake_statement.pdf --dry-run
-```
-
-**New laptop? Fresh AI chat that has no idea what any of this is?** Everything it needs is in [prompts/PROJECT_CONTEXT.md](prompts/PROJECT_CONTEXT.md). Claude Code loads it automatically; for any other AI, paste it in. The moving-day checklist (what to copy, what *never* to copy) is in [prompts/README.md](prompts/README.md#moving-to-another-laptop).
+**New laptop?** Everything needed to understand the project is in [AUTOMATION.md](AUTOMATION.md), [Architecture.md](Architecture.md), and [Backend.md](Backend.md).
 
 ---
 
@@ -220,8 +211,9 @@ python cli.py process data/inbox/fake_statement.pdf --dry-run
 
 1. Bank emails you a statement → drop it into the app (or into `data/inbox/` if automation is on).
 2. Open **Review** and approve the few rows it wasn't sure about.
-3. Click **Sync to Google Sheets**.
-4. Open the **Dashboard** and feel things.
+3. Read the **Money suggestions** and decide which actions make sense for you.
+4. Click **Sync to Google Sheets**.
+5. Open the **Dashboard** and review the trend.
 
 <p align="center">
   <img src="https://api.memegen.link/images/panik-kalm-panik/47_transactions_I_don't_remember/The_app_sorted_them_all/They're_all_food_delivery.png" width="360" alt="Panik kalm panik: 47 transactions I don't remember, the app sorted them all, they're all food delivery">
@@ -286,7 +278,7 @@ The app quietly watches for:
 |---|---|
 | Your statement PDFs and the database | **Your laptop only** (`data/`, never committed to git) |
 | PDF passwords | **macOS Keychain only.** PDFs are unlocked *on your laptop* before anything is sent. |
-| Statement pages | Sent to Claude to be read (encrypted connection) |
+| Statement pages | Read locally from the PDF |
 | Account numbers | **Last 4 digits only** in the database and sheets |
 | Your Google Sheets | Only the 5 categories. Salary and transfers are never written there. |
 | The web app | Reachable only from your own computer (`--server.address localhost`) |
@@ -296,7 +288,7 @@ The app quietly watches for:
   <br><i>Your bank data peeking at the public internet, then deciding to stay home.</i>
 </p>
 
-Full details: [Architecture → What leaves your computer](Architecture.md#8-what-leaves-your-computer).
+Full details: [Architecture](Architecture.md) and [Automation](AUTOMATION.md).
 
 ---
 
@@ -304,11 +296,10 @@ Full details: [Architecture → What leaves your computer](Architecture.md#8-wha
 
 | Thing | Cost |
 |---|---|
-| Reading a 5-page statement (Claude Opus 5.5) | ~10–25¢ |
-| Categorizing | A few cents, and falling to ~0 as it learns your shops |
+| Reading and categorizing | Free; runs locally |
 | Google Sheets | Free |
 | Hosting | Free (it's your laptop) |
-| **A normal month** | **Well under $1** |
+| **A normal month** | **Free, apart from optional Google usage** |
 
 <p align="center">
   <img src="https://api.memegen.link/images/money/An_app_that_finds_where_my_salary_went~q/Shut_up_and_take_my_money.gif" width="400" alt="Shut up and take my money">
@@ -349,14 +340,14 @@ Restaurants and food delivery live in Other, not Grocery. Cooked food isn't groc
 **Can I edit the Google Sheets directly?**
 Please don't. The sheets are a *mirror* of the app's database, and the next sync overwrites hand edits. Fix things in the app (Review or Transactions page) and they flow to the sheets automatically.
 
-**The AI put something in the wrong category.**
+**A transaction is in the wrong category.**
 Change it in the app and tick *"Remember my choice"*. That shop is sorted your way from then on.
 
 **Does it work with my bank?**
-Probably. It doesn't use per-bank templates; the AI reads the page like a human would. The math check catches anything it misreads.
+It supports text-based statement layouts without per-bank templates. The math check catches extraction errors. Scanned image-only PDFs may need OCR in a future enhancement.
 
-**Is my data used to train anything?**
-The app sends statement pages to the Claude API to be read. Check Anthropic's current data-handling terms for API usage if that matters to you (it should).
+**Is my data sent to an AI service?**
+No. The current processing and suggestion path is local. Only an explicit Google Sheets sync writes data externally.
 
 **Can my partner, roommate or cat use it too?**
 Version 1 is one person, one laptop. The cat will have to wait.
@@ -378,12 +369,12 @@ Version 1 is one person, one laptop. The cat will have to wait.
 | `python cli.py status` | All statements and where they're up to |
 | `python cli.py alerts` | Open alerts |
 | `python cli.py summary --month 2026-11 [--send]` | Monthly summary (optionally sent to Telegram) |
-| `python cli.py costs` | What the AI has cost you |
+| `python cli.py costs` | Legacy cost-log command; normally empty in local mode |
 | `python cli.py rules` | Shops the app has learned |
 | `python cli.py forget ID` | Delete a statement and its rows |
 | `python cli.py backup` | Back up the database |
 | `python cli.py password add NAME` | Save a PDF password in the Keychain (`list`, `remove` too) |
-| `python -m pytest` | Run the 210 automated tests (free, no real APIs). See [TESTING.md](TESTING.md). |
+| `python -m pytest` | Run the automated tests locally, with no real APIs. See [TESTING.md](TESTING.md). |
 
 ---
 
@@ -395,8 +386,7 @@ Version 1 is one person, one laptop. The cat will have to wait.
 | "This doesn't look like a bank statement" | It's probably not. Check you uploaded the right PDF. |
 | "Numbers don't match – check row 37" | Open **Statements**, compare row 37 with the PDF, fix it in **Transactions**, then approve |
 | "Can't open the Grocery sheet" | Share that spreadsheet with the email in `service_account.json` (`client_email`) as **Editor** |
-| "Claude is busy" | Wait a minute and try again. It's always safe to retry. |
-| "No Claude API key found" | Check `.env` exists in the project folder and has `ANTHROPIC_API_KEY=sk-ant-…` |
+| "This doesn't look like a bank statement" | Confirm the PDF contains transaction text; scanned image-only PDFs may need OCR. |
 | Sheets look wrong | `python cli.py rebuild --all` rebuilds them from the database |
 
 ---
@@ -404,10 +394,10 @@ Version 1 is one person, one laptop. The cat will have to wait.
 ## 🗺️ Roadmap
 
 - [x] Read, check, categorize, review, sync
-- [x] Dashboard, alerts, cost log
+- [x] Dashboard, alerts, money suggestions
 - [x] Folder automation and Telegram summary
 - [ ] Fetch statements from Gmail automatically
-- [ ] Privacy mode (remove account numbers before sending to the AI)
+- [ ] OCR for scanned image-only statements
 - [ ] Budgets per category, with a heads-up at 80%
 - [ ] Ask questions in plain English ("How much on travel in Q3?")
 - [ ] Match receipt photos to transactions
@@ -418,19 +408,16 @@ Version 1 is one person, one laptop. The cat will have to wait.
 
 | Doc | Read it if you want… |
 |---|---|
-| [Plan.md](Plan.md) | The what and why: goals, categories, screens, phases, risks |
+| [AUTOMATION.md](AUTOMATION.md) | Exact workflow, use cases, safety justification, and Google Sheets layout |
 | [Architecture.md](Architecture.md) | How it fits together, where your data goes, and the design decisions |
-| [Backend.md](Backend.md) | Setup, every module explained, error handling, testing |
+| [Backend.md](Backend.md) | Setup, modules, error handling, and testing |
 | [DB.md](DB.md) | Every table and column, how duplicates and sync work, backups |
-| [TESTING.md](TESTING.md) | How it's tested: 34 real-life scenarios, fake statements, the bugs the tests caught, latest results |
-| [Reason.md](Reason.md) | **Why this and not that**: every decision (business rules, stack, database, algorithms, security) with its trade-offs |
-| [prompts/](prompts/README.md) | The exact words sent to Claude, the **project handoff** for continuing on another laptop (or in a fresh AI chat), and how to move everything over |
+| [TESTING.md](TESTING.md) | How local parsing, reconciliation, suggestions, sync, and pages are tested |
 
 ---
 
 ## 🙏 Credits
 
-- Reading and categorizing by [Claude](https://www.anthropic.com/claude) (Anthropic)
 - Built with Streamlit, gspread, pypdf, pandas, Plotly and Typer
 - Memes generated with [memegen.link](https://memegen.link) · GIFs via [GIPHY](https://giphy.com)
 

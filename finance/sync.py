@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from finance import ledger
+from finance.config import CATEGORIES
 from finance.sheets import SheetAccessError, SheetsMirror
 
 
@@ -33,12 +34,13 @@ class SyncResult:
 def sync(
     db, settings, mirror_factory=SheetsMirror, extra_tabs: set[tuple[str, str]] | frozenset = frozenset()
 ) -> SyncResult:
-    if not settings.sheets:
+    if not settings.sheets and not settings.fintrack_spreadsheet_id:
         raise SyncError(
-            "Google Sheets aren't set up yet: add your spreadsheet IDs under 'sheets:' "
-            "in config.yaml (see Backend.md → Setup)."
+            "Google Sheets aren't set up yet: add fintrack_spreadsheet_id or spreadsheet IDs "
+            "under 'sheets:' in config.yaml."
         )
-    enabled = set(settings.sheets)
+    single_book = bool(settings.fintrack_spreadsheet_id)
+    enabled = set(CATEGORIES) - {"Not an expense"} if single_book else set(settings.sheets)
     changed = ledger.rows_needing_sync(db)  # approved rows with synced_at IS NULL
 
     tabs = {(r["category"], r["month"]) for r in changed if r["category"] in enabled}
@@ -58,10 +60,20 @@ def sync(
     run_id = ledger.start_sync_run(db)
     try:
         mirror = mirror_factory(settings)
-        for category, month in sorted(tabs):
-            mirror.rebuild_tab(category, month, ledger.rows_for_tab(db, category, month))
-        for category in sorted({c for c, _ in tabs}):
-            mirror.rebuild_summary(category, ledger.months_for(db, category))
+        if single_book:
+            for month in sorted({m for _, m in tabs}):
+                rows = [
+                    [category, *row]
+                    for category in sorted(enabled)
+                    for row in ledger.rows_for_tab(db, category, month)
+                ]
+                mirror.rebuild_fintrack_month(month, rows)
+            mirror.rebuild_fintrack_summary(db, sorted({m for _, m in tabs}), enabled)
+        else:
+            for category, month in sorted(tabs):
+                mirror.rebuild_tab(category, month, ledger.rows_for_tab(db, category, month))
+            for category in sorted({c for c, _ in tabs}):
+                mirror.rebuild_summary(category, ledger.months_for(db, category))
     except SheetAccessError as e:
         ledger.finish_sync_run(db, run_id, "failed", error=str(e))
         raise SyncError(str(e)) from e

@@ -43,8 +43,10 @@ def run_checks(path: str | Path | None = None, online: bool = True) -> list[Chec
         return checks
     base = cfg.resolve().parent
 
-    # Claude
-    if os.environ.get("ANTHROPIC_API_KEY"):
+    # AI or local parser
+    if settings.offline_mode:
+        checks.append(Check(True, "Offline mode", "Text-based PDFs are parsed locally; no API key or network is used."))
+    elif os.environ.get("ANTHROPIC_API_KEY"):
         if online:
             try:
                 anthropic.Anthropic().models.list(limit=1)  # free: just lists models
@@ -71,12 +73,12 @@ def run_checks(path: str | Path | None = None, online: bool = True) -> list[Chec
         )
 
     # Google
-    if not settings.sheets:
+    if not settings.sheets and not settings.fintrack_spreadsheet_id:
         checks.append(
             Check(
                 False,
                 "Google Sheets",
-                "No spreadsheet IDs in config.yaml yet (see Backend.md → Setup, steps 4–6).",
+                "Add a FinTrack spreadsheet ID or category spreadsheet IDs in config.yaml.",
             )
         )
     elif not settings.service_account_file.exists():

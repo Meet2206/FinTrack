@@ -1,4 +1,4 @@
-"""Setup: is everything connected? Plus AI costs and saved rules."""
+"""Setup: is everything connected? Plus saved rules and backups."""
 
 from __future__ import annotations
 
@@ -11,6 +11,13 @@ from ui_common import page
 settings, db = page("Setup", "🛠️")
 st.title("🛠️ Setup & housekeeping")
 
+if settings.google_client_id:
+    st.info("Google OAuth client ID is saved. Google sign-in or a service-account JSON is still required for sync.")
+if settings.fintrack_spreadsheet_id:
+    st.success("Single-workbook mode is configured for FinTrack.")
+else:
+    st.warning("To enable Google saving, add the FinTrack Sheet ID to config.yaml and provide Google authorization.")
+
 st.subheader("Checklist")
 if st.button("Run checks"):
     with st.spinner("Checking…"):
@@ -21,22 +28,9 @@ if st.button("Run checks"):
                 st.write(f"❌ **{c.label}**: {c.fix}")
 else:
     st.caption(
-        "Tests your Claude key, Google spreadsheets, folders and .gitignore. "
+        "Tests local parsing, Google spreadsheets, folders and .gitignore. "
         "Step-by-step setup is in Backend.md → Setup."
     )
-
-st.subheader("AI costs")
-costs = ledger.costs_summary(db)
-if costs.empty:
-    st.caption("No AI calls yet.")
-else:
-    st.dataframe(
-        costs,
-        hide_index=True,
-        width="stretch",
-        column_config={"usd": st.column_config.NumberColumn("USD", format="$%.4f")},
-    )
-    st.caption(f"Total so far: ${costs.usd.sum():.4f}")
 
 st.subheader("Saved shop rules")
 rules = ledger.list_rules(db)

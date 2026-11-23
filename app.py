@@ -10,7 +10,9 @@ from pathlib import Path
 
 import streamlit as st
 
-from finance import pdf_tools, pipeline
+from finance import ledger, pdf_tools, pipeline
+from finance.suggestions import suggestions_for_frame
+from finance.sync import SyncError, sync
 from ui_common import page
 
 settings, db = page("Upload", "💸")
@@ -54,18 +56,80 @@ if files and st.button("Process ▶", type="primary"):
             st.page_link("pages/4_Statements.py", label="Check it on the Statements page →")
         else:
             st.success(f"**{uploaded.name}**: {result.message}")
-            if result.sorted_by:
-                s = result.sorted_by
-                st.caption(f"Sorted by saved rules: {s['rule']} · keywords: {s['keyword']} · AI: {s['ai']}")
-            if result.to_review:
-                st.page_link("pages/1_Review.py", label=f"Review {result.to_review} row(s) →", icon="👀")
+
+        if result.status != "failed" and result.statement_id:
+            rows = ledger.transactions_frame(db, statement_id=result.statement_id)
+            if not rows.empty:
+                view = rows.copy()
+                view["Money out"] = view.amount.clip(lower=0)
+                view["Money in"] = (-view.amount).clip(lower=0)
+                view["Net"] = view.amount
+                category_totals = (
+                    view.groupby("category", dropna=False)
+                    .agg(
+                        **{
+                            "Money out": ("Money out", "sum"),
+                            "Money in": ("Money in", "sum"),
+                            "Net": ("Net", "sum"),
+                            "Transactions": ("id", "count"),
+                        }
+                    )
+                    .reset_index()
+                    .rename(columns={"category": "Category"})
+                )
+                st.subheader("Finances by category")
+                st.dataframe(category_totals, hide_index=True, width="stretch")
+                suggestions = suggestions_for_frame(view, settings.currency)
+                if suggestions:
+                    st.subheader("💡 Money suggestions")
+                    st.caption("These are local estimates based only on this statement—not financial advice.")
+                    for suggestion in suggestions:
+                        st.info(f"**{suggestion['title']}**\n\n{suggestion['text']}")
+                st.subheader("All transactions")
+                st.dataframe(
+                    view[
+                        [
+                            "txn_date",
+                            "merchant",
+                            "description",
+                            "Money out",
+                            "Money in",
+                            "Net",
+                            "category",
+                            "confidence",
+                        ]
+                    ].rename(
+                        columns={
+                            "txn_date": "Date",
+                            "merchant": "Merchant",
+                            "description": "Description",
+                            "category": "Category",
+                            "confidence": "Confidence",
+                        }
+                    ),
+                    hide_index=True,
+                    width="stretch",
+                    height=420,
+                )
+        if result.status != "failed" and result.sorted_by:
+            s = result.sorted_by
+            st.caption(f"Sorted by saved rules: {s['rule']} · keywords: {s['keyword']} · AI: {s['ai']}")
+        if result.status != "failed" and result.to_review:
+            st.page_link("pages/1_Review.py", label=f"Review {result.to_review} row(s) →", icon="👀")
+        if result.status == "ready" and settings.auto_sync and settings.sheets and not result.to_review:
+            try:
+                sync_result = sync(db, settings)
+                st.success(f"Google Sheets updated automatically: {sync_result.message}")
+            except SyncError as e:
+                st.warning(f"Processed locally, but Google Sheets sync needs setup: {e}")
 
 with st.expander("How does this work?"):
     st.markdown("""
-1. **Read**: Claude reads the PDF a few pages at a time and copies out every transaction.
+1. **Read**: the local parser extracts transactions from the PDF.
 2. **Check**: the app replays every row from the opening balance and compares with the bank's
    printed balance. If anything's off, it points at the exact row and holds everything back.
-3. **Sort**: shops it has seen before are sorted instantly by saved rules, and new ones by the AI.
-4. **Review**: you approve the few rows the AI wasn't sure about. Your choices become rules.
-5. **Sync**: the sidebar button copies everything into your 5 Google Sheets, one tab per month.
+3. **Sort**: saved merchant rules, keywords, and local heuristics assign categories.
+4. **Suggest**: the app highlights recurring charges, concentrated spending, and possible set-asides.
+5. **Review**: you approve uncertain rows. Your choices become rules.
+6. **Sync**: the sidebar button copies approved rows into the FinTrack Google Sheet, one tab per month.
 """)

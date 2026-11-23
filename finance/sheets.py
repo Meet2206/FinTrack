@@ -14,8 +14,11 @@ from pathlib import Path
 
 import gspread
 
+from finance import ledger
+
 HEADERS = ["Date", "Merchant", "Description", "Amount", "Currency", "Account", "Txn ID"]
 SUMMARY = "Summary"
+FINTRACK_HEADERS = ["Category", *HEADERS]
 
 
 class SheetAccessError(Exception):
@@ -48,7 +51,8 @@ class SheetsMirror:
     def book(self, category: str) -> gspread.Spreadsheet:
         if category not in self._books:
             try:
-                self._books[category] = self.gc.open_by_key(self.settings.sheets[category])
+                spreadsheet_id = self.settings.fintrack_spreadsheet_id or self.settings.sheets[category]
+                self._books[category] = self.gc.open_by_key(spreadsheet_id)
             except (
                 gspread.exceptions.SpreadsheetNotFound,
                 gspread.exceptions.APIError,
@@ -77,6 +81,42 @@ class SheetsMirror:
         ws.update(values=[HEADERS] + rows, range_name="A1", value_input_option="USER_ENTERED")
         ws.freeze(rows=1)
 
+    def rebuild_fintrack_month(self, month: str, rows: list[list]) -> None:
+        """Write one month tab with category partitions into the single FinTrack workbook."""
+        book = self.book("Grocery")
+        try:
+            ws = book.worksheet(month)
+        except gspread.exceptions.WorksheetNotFound:
+            ws = book.add_worksheet(title=month, rows=max(len(rows) + 50, 100), cols=len(FINTRACK_HEADERS))
+        if not rows:
+            book.del_worksheet(ws)
+            return
+        ws.clear()
+        ws.resize(rows=max(len(rows) + 50, 100), cols=len(FINTRACK_HEADERS))
+        ws.update(values=[FINTRACK_HEADERS] + rows, range_name="A1", value_input_option="USER_ENTERED")
+        ws.freeze(rows=1)
+
+    def rebuild_fintrack_summary(self, db, months: list[str], categories: set[str]) -> None:
+        """Create a compact month/category summary in the single FinTrack workbook."""
+        book = self.book("Grocery")
+        try:
+            summary = book.worksheet(SUMMARY)
+        except gspread.exceptions.WorksheetNotFound:
+            summary = book.add_worksheet(title=SUMMARY, rows=300, cols=4, index=0)
+        values = [["Month", "Category", "Total", "Transactions"]]
+        for month in sorted(months, reverse=True):
+            for category in sorted(categories):
+                rows = ledger.rows_for_tab(db, category, month)
+                if rows:
+                    values.append([month, category, sum(r[3] for r in rows), len(rows)])
+        summary.clear()
+        summary.update(values=values, range_name="A1", value_input_option="USER_ENTERED")
+        summary.freeze(rows=1)
+        month_tabs = sorted(
+            (ws for ws in book.worksheets() if ws.title != SUMMARY), key=lambda ws: ws.title, reverse=True
+        )
+        book.reorder_worksheets([summary] + month_tabs)
+
     def rebuild_summary(self, category: str, months: list[str]) -> None:
         """Rewrite the Summary tab, then order tabs: Summary first, newest month next."""
         book = self.book(category)
@@ -104,7 +144,8 @@ def check_access(settings) -> list[tuple[bool, str]]:
         mirror = SheetsMirror(settings)
     except SheetAccessError as e:
         return [(False, str(e))]
-    for category in settings.sheets:
+    categories = (set(settings.sheets) if not settings.fintrack_spreadsheet_id else {"Grocery"})
+    for category in categories:
         try:
             titles = [ws.title for ws in mirror.book(category).worksheets()]
         except SheetAccessError as e:

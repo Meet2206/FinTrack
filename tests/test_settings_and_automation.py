@@ -60,7 +60,7 @@ def test_example_settings_file_is_valid(tmp_path):
     example = Path(__file__).resolve().parent.parent / "config.example.yaml"
     s = load_settings(write_config(tmp_path, example.read_text()))
     assert s.sheets == {}, "blank IDs in the example mean 'not set up yet'"
-    assert "Subscriptions" in s.keywords and s.pricing_per_million_tokens["claude-opus-5-5"].input == 4.00
+    assert "Subscriptions" in s.keywords and s.offline_mode is True
 
 
 def test_env_file_next_to_settings_is_loaded(tmp_path, monkeypatch):

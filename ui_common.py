@@ -47,7 +47,12 @@ def sidebar(settings: Settings, db: sqlite3.Connection) -> None:
             st.warning(f"{c['mismatches']} statement(s) don't add up. See Statements.")
         if c["alerts"]:
             st.info(f"⚠️ {c['alerts']} open alert(s). See Dashboard.")
-        if st.button("🔄 Sync to Google Sheets", width="stretch", disabled=not c["unsynced"]):
+        sheets_ready = bool(settings.sheets or settings.fintrack_spreadsheet_id)
+        if st.button(
+            "🔄 Sync to Google Sheets",
+            width="stretch",
+            disabled=not c["unsynced"] or not sheets_ready,
+        ):
             with st.spinner("Updating Google Sheets…"):
                 try:
                     st.success(sync(db, settings).message)
@@ -56,7 +61,7 @@ def sidebar(settings: Settings, db: sqlite3.Connection) -> None:
         last = ledger.last_sync(db)
         if last:
             st.caption(f"Last sync: {last['finished_at'] or last['started_at']} ({last['status']})")
-        if not settings.sheets:
+        if not settings.sheets and not settings.fintrack_spreadsheet_id:
             st.caption("Google Sheets not set up yet. See the Setup page.")
 
 
