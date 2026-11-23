@@ -17,6 +17,10 @@ PDF → extract locally → reconcile balances → categorize locally
 The goal is simple: stop copying transactions into spreadsheets by hand every
 month while keeping financial decisions with the human who owns the account.
 
+> **MEME:** “I will track every expense manually this month.”
+>
+> **Narrator:** They did not.
+
 ## Completed
 
 - Local extraction for the supplied text-based Indian-style statements
@@ -35,6 +39,9 @@ month while keeping financial decisions with the human who owns the account.
 The repetitive parts are mechanical: reading rows, checking arithmetic,
 grouping merchants, spotting recurring charges, and rebuilding monthly tabs.
 Automating those steps creates a consistent two-minute monthly routine.
+
+> **MEME:** The spreadsheet has entered the chat. It brought charts, receipts,
+> and questions about the 19 food-delivery charges.
 
 The app deliberately does not automate money movement, subscription
 cancellation, investment selection, or approval of questionable transactions.
@@ -69,6 +76,9 @@ Suggestions are local heuristics, not advice. They can identify:
 Every suggestion includes the observed amount and explains the estimate. The
 user chooses whether it makes sense.
 
+> **MEME:** “It is not a spending problem; it is a temporary liquidity event.”
+> FinTrack files it under **Other** and quietly shows the total.
+
 ## Roadmap
 
 1. OCR support for scanned image-only PDFs.
@@ -87,3 +97,11 @@ user chooses whether it makes sense.
 - No destructive financial actions.
 - A failed sync is retryable.
 - The bank statement wins arguments with the app.
+
+## Sarcastic test cases
+
+- **MEME:** “The subscription is basically free.” Check the monthly total.
+- **MEME:** “That ₹300 purchase was a one-off.” Check whether the merchant
+  appears twelve times.
+- **MEME:** “I will remember what this charge was.” That is why Review exists.
+- **MEME:** “The balance looks right-ish.” Reconciliation requires exact cents.
