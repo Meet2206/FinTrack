@@ -45,8 +45,8 @@ def sidebar(settings: Settings, db: sqlite3.Connection) -> None:
         col2.metric("Not synced", c["unsynced"])
         if c["mismatches"]:
             st.warning(f"{c['mismatches']} statement(s) don't add up. See Statements.")
-        if c["alerts"]:
-            st.info(f"⚠️ {c['alerts']} open alert(s). See Dashboard.")
+        # Alerts remain available on Dashboard; don't repeat a persistent banner
+        # in the sidebar every time Streamlit reruns or the page is refreshed.
         sheets_ready = bool(settings.sheets or settings.fintrack_spreadsheet_id)
         if st.button(
             "🔄 Sync to Google Sheets",
